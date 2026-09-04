@@ -1,0 +1,9 @@
+# Dependencias
+node_modules/
+.yarn/
+.pnp.*
+
+# React Native / Carpetas generadas automáticamente
+my-app/node_modules/
+*.log
+.env
