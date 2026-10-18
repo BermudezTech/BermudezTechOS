@@ -51,6 +51,8 @@ export function makeTx(over: Partial<Transaction> & { on?: IsoDate } = {}): Tran
     subscriptionId: null,
     subscriptionPeriod: null,
     cdtId: null,
+    recurringIncomeId: null,
+    recurringIncomePeriod: null,
     ...rest,
   };
 }

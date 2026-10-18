@@ -49,6 +49,9 @@ erDiagram
     accounts ||--o{ subscriptions : ""
     categories ||--o{ subscriptions : ""
     subscriptions ||--o{ transactions : "débitos generados"
+    accounts ||--o{ recurring_incomes : ""
+    categories ||--o{ recurring_incomes : ""
+    recurring_incomes ||--o{ transactions : "ingresos registrados"
     reimbursement_groups ||--o{ transactions : "movimientos de terceros"
     accounts ||--|| cdts : "cuenta INVESTMENT"
     cdts ||--o| cdts : "renovación"
@@ -122,9 +125,11 @@ Montos **siempre positivos**; la dirección la da `type`. Una transferencia es *
 | `reimbursement_group_id` | UUID | FK → reimbursement_groups.id, NULL | Si tiene valor, el movimiento es **dinero de terceros** (viático, adelanto o reembolso) (§5). |
 | `subscription_id` | UUID | FK → subscriptions.id, NULL | Débito generado por suscripción. |
 | `subscription_period` | VARCHAR(7) | NULL | `YYYY-MM` (o `YYYY` en anuales). UNIQUE (`subscription_id`, `subscription_period`). |
+| `recurring_income_id` | UUID | FK → recurring_incomes.id, NULL | Ingreso registrado desde un ingreso recurrente; solo con `type = INCOME`. |
+| `recurring_income_period` | VARCHAR(7) | NULL | `YYYY-MM` (o `YYYY` en anuales). Obligatorio si y solo si hay `recurring_income_id`. **Sin UNIQUE**: se permite más de un ingreso por periodo. |
 | `cdt_id` | UUID | FK → cdts.id, NULL | Movimiento ligado a un CDT (apertura, interés, retención, pago). |
 
-**Índices:** (`user_id`, `account_id`, `occurred_at`), (`counter_account_id`), (`user_id`, `category_id`, `occurred_at`), (`reimbursement_group_id`), (`user_id`, `server_updated_at`).
+**Índices:** (`user_id`, `account_id`, `occurred_at`), (`counter_account_id`), (`user_id`, `category_id`, `occurred_at`), (`reimbursement_group_id`), (`recurring_income_id`, `recurring_income_period`), (`user_id`, `server_updated_at`).
 
 **Reglas derivadas:**
 - Pago de tarjeta = `TRANSFER` de cuenta de ahorros → tarjeta (§3).
@@ -223,7 +228,30 @@ Bienes cuyo valor no proviene de transacciones (vehículos, inmuebles…). Suman
 | `value` | NUMERIC(14,2) | NOT NULL, CHECK ≥ 0 | Valor estimado. |
 | `valid_until` | DATE | NOT NULL | Hasta cuándo es válido el valor; pasada la fecha, la app pide actualizarlo. |
 
-## 8. Tablas no sincronizadas
+## 8. `recurring_incomes` — Ingresos recurrentes (spec 002)
+
+Plantillas de ingresos que se repiten (salario, arriendo recibido, honorarios). A diferencia de `subscriptions`, **no generan movimientos automáticamente**: el usuario registra cada ingreso desde la plantilla y puede cambiar el valor. El valor real queda en `transactions.amount`; `expected_amount` solo prellena el formulario.
+
+| Columna | Tipo | Restricciones | Descripción |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `user_id` | UUID | FK → users.id, NOT NULL | Dueño del registro. **Solo servidor.** |
+| `account_id` | UUID | FK → accounts.id, NOT NULL | Cuenta de destino sugerida. |
+| `category_id` | UUID | FK → categories.id, NULL | Categoría con `kind = INCOME`. |
+| `name` | VARCHAR(100) | NOT NULL | "Salario". |
+| `icon` | VARCHAR(100) | NULL | |
+| `expected_amount` | NUMERIC(14,2) | NOT NULL, CHECK > 0 | Valor sugerido, en la moneda de la cuenta; cambiarlo no altera ingresos ya registrados. |
+| `cycle` | VARCHAR(10) | NOT NULL DEFAULT 'MONTHLY' | `MONTHLY`, `YEARLY`. |
+| `expected_day` | SMALLINT | NOT NULL, 1–31 | Si el mes es más corto, el último día. |
+| `expected_month` | SMALLINT | NULL, 1–12 | Obligatorio en `YEARLY`. |
+| `start_date` | DATE | NOT NULL | Primer periodo. |
+| `status` | VARCHAR(10) | NOT NULL DEFAULT 'ACTIVE' | `ACTIVE`, `PAUSED`. Solo los activos aparecen en el selector del formulario. |
+
+**Borrado:** lógico (`deleted_at`). Los ingresos registrados conservan su `recurring_income_id` para el historial y siguen contando como ingresos normales.
+
+**Aviso de duplicado:** al registrar, si ya existe un `transactions` no borrado con el mismo (`recurring_income_id`, `recurring_income_period`), la app avisa sin bloquear.
+
+## 9. Tablas no sincronizadas
 
 **`sync_metadata`** — *solo cliente*
 

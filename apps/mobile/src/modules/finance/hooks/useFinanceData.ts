@@ -31,6 +31,11 @@ export function useActiveSubscriptions() {
   return useMemo(() => activeList(records), [records]);
 }
 
+export function useActiveRecurringIncomes() {
+  const records = useFinanceStore((s) => s.recurringIncomes);
+  return useMemo(() => activeList(records), [records]);
+}
+
 export function useActiveGroups() {
   const records = useFinanceStore((s) => s.reimbursementGroups);
   return useMemo(() => activeList(records), [records]);

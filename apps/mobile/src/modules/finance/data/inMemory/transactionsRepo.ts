@@ -26,6 +26,18 @@ function check(input: TransactionInput, { creating }: { creating: boolean }): Tr
     const group = state.reimbursementGroups[valid.reimbursementGroupId];
     if (!group || group.deletedAt) throw new ValidationError('NOT_FOUND', 'reimbursementGroupId', 'El grupo no existe.');
   }
+  if (valid.recurringIncomeId) {
+    if (valid.type !== 'INCOME') {
+      throw new ValidationError('RECURRING_INCOME_TYPE', 'recurringIncomeId', 'Solo los ingresos se asocian a un ingreso recurrente.');
+    }
+    // Los históricos pueden apuntar a una plantilla borrada (FR-009).
+    if (!state.recurringIncomes[valid.recurringIncomeId]) {
+      throw new ValidationError('NOT_FOUND', 'recurringIncomeId', 'El ingreso recurrente no existe.');
+    }
+  }
+  if (!valid.recurringIncomeId !== !valid.recurringIncomePeriod) {
+    throw new ValidationError('INVALID_PERIOD', 'recurringIncomePeriod', 'Falta el periodo del ingreso recurrente.');
+  }
   return valid;
 }
 

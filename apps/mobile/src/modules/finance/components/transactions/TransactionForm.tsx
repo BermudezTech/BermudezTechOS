@@ -17,23 +17,29 @@ import {
   type IconName,
 } from '@/components/ui';
 import { localDayKey, todayLocal } from '@/lib/dates';
-import { toInputString } from '@/lib/money';
+import { formatCop, toInputString } from '@/lib/money';
 import { useTheme } from '@/theme';
 
 import { ValidationError } from '../../data/FinanceRepository';
+import { hasEntryInPeriod, periodFor, prefillFrom } from '../../domain/recurringIncomes';
 import {
   toTransactionInput,
   transactionFormSchema,
   type TransactionFormOutput,
   type TransactionFormValues,
 } from '../../domain/schemas/transaction';
-import type { Account, Category, Transaction, TransactionInput, TransactionType } from '../../domain/types';
+import type { Account, Category, RecurringIncome, Transaction, TransactionInput, TransactionType } from '../../domain/types';
+import { useActiveTransactions } from '../../hooks/useFinanceData';
+import { useRecurringIncomeLookup } from '../../hooks/useRecurringIncomes';
 import { accountTypeMeta } from '../accounts/accountMeta';
+import { RecurringIncomePicker } from '../recurringIncome/RecurringIncomePicker';
 
 export type TransactionFormDefaults = {
   type?: TransactionType;
   accountId?: string | null;
   reimbursementGroupId?: string | null;
+  /** Plantilla preseleccionada (`?recurringIncomeId=`); prellena el formulario. */
+  recurringIncomeId?: string | null;
 };
 
 type Props = {
@@ -41,6 +47,8 @@ type Props = {
   defaults?: TransactionFormDefaults;
   accounts: { account: Account; label: string }[];
   categories: Category[];
+  /** Plantillas activas que ofrece el selector (solo al crear un ingreso). */
+  recurringIncomes?: RecurringIncome[];
   onSubmit: (input: TransactionInput) => Promise<unknown>;
   submitLabel?: string;
   /** Selector opcional de grupo de reembolso (lo añade la sección de reembolsos). */
@@ -53,22 +61,37 @@ const typeOptions: { value: TransactionType; label: string }[] = [
   { value: 'TRANSFER', label: 'Transferir' },
 ];
 
-export function TransactionForm({ initial, defaults, accounts, categories, onSubmit, submitLabel = 'Guardar', renderGroupField }: Props) {
+export function TransactionForm({
+  initial,
+  defaults,
+  accounts,
+  categories,
+  recurringIncomes = [],
+  onSubmit,
+  submitLabel = 'Guardar',
+  renderGroupField,
+}: Props) {
   const theme = useTheme();
   const categoryMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const schema = useMemo(() => transactionFormSchema(categoryMap), [categoryMap]);
 
-  const initialType = initial?.type ?? defaults?.type ?? 'EXPENSE';
+  const lookupRecurringIncome = useRecurringIncomeLookup();
+  const transactions = useActiveTransactions();
+
+  const preset = !initial && defaults?.recurringIncomeId ? recurringIncomes.find((r) => r.id === defaults.recurringIncomeId) : undefined;
+  const prefill = preset ? prefillFrom(preset, todayLocal()) : undefined;
+  const initialType = preset ? 'INCOME' : (initial?.type ?? defaults?.type ?? 'EXPENSE');
   const { control, handleSubmit, setError, setValue, formState } = useForm<TransactionFormValues, unknown, TransactionFormOutput>({
     resolver: zodResolver(schema),
     defaultValues: {
       type: initialType,
-      amount: initial ? toInputString(initial.amount) : '',
-      accountId: initial?.accountId ?? defaults?.accountId ?? accounts[0]?.account.id ?? null,
+      amount: initial ? toInputString(initial.amount) : prefill ? toInputString(prefill.amount) : '',
+      accountId: initial?.accountId ?? prefill?.accountId ?? defaults?.accountId ?? accounts[0]?.account.id ?? null,
       counterAccountId: initial?.counterAccountId ?? null,
-      categoryId: initial?.categoryId ?? null,
+      categoryId: initial?.categoryId ?? prefill?.categoryId ?? null,
       date: initial ? localDayKey(initial.occurredAt) : todayLocal(),
-      description: initial?.description ?? '',
+      description: initial?.description ?? prefill?.description ?? '',
+      recurringIncomeId: initial?.recurringIncomeId ?? preset?.id ?? null,
       // Las transferencias no se asocian a grupos.
       reimbursementGroupId: initialType === 'TRANSFER' ? null : (initial?.reimbursementGroupId ?? defaults?.reimbursementGroupId ?? null),
     },
@@ -76,6 +99,25 @@ export function TransactionForm({ initial, defaults, accounts, categories, onSub
   const type = useWatch({ control, name: 'type' });
   const accountId = useWatch({ control, name: 'accountId' });
   const isTransfer = type === 'TRANSFER';
+  const recurringIncomeId = useWatch({ control, name: 'recurringIncomeId' });
+  const date = useWatch({ control, name: 'date' });
+  const linked = type === 'INCOME' && recurringIncomeId ? lookupRecurringIncome(recurringIncomeId) : undefined;
+  const linkedPeriod = linked ? periodFor(linked.cycle, date) : null;
+  const duplicate = linked && linkedPeriod ? hasEntryInPeriod(transactions, linked.id, linkedPeriod, initial?.id) : false;
+  const showPicker = !initial && type === 'INCOME' && recurringIncomes.length > 0;
+
+  const selectRecurringIncome = (id: string | null) => {
+    setValue('recurringIncomeId', id);
+    const template = id ? recurringIncomes.find((r) => r.id === id) : undefined;
+    // Al quitar la selección solo se borra el vínculo; los campos quedan como estén (research R3).
+    if (!template) return;
+    const values = prefillFrom(template, todayLocal());
+    setValue('amount', toInputString(values.amount));
+    setValue('accountId', values.accountId);
+    setValue('categoryId', values.categoryId);
+    setValue('description', values.description);
+    setValue('date', values.date);
+  };
 
   const accountOptions = accounts.map(({ account, label }) => ({
     value: account.id,
@@ -87,7 +129,7 @@ export function TransactionForm({ initial, defaults, accounts, categories, onSub
 
   const submit = handleSubmit(async (values) => {
     try {
-      await onSubmit(toTransactionInput(values, initial));
+      await onSubmit(toTransactionInput(values, initial, (id) => lookupRecurringIncome(id)?.cycle));
     } catch (error) {
       if (error instanceof ValidationError) {
         setError((error.field as keyof TransactionFormValues) || 'amount', { message: error.message });
@@ -109,6 +151,7 @@ export function TransactionForm({ initial, defaults, accounts, categories, onSub
               field.onChange(next);
               // La categoría depende del tipo; la cuenta destino y el grupo solo aplican a ciertos tipos.
               setValue('categoryId', null);
+              if (next !== 'INCOME') setValue('recurringIncomeId', null);
               if (next !== 'TRANSFER') setValue('counterAccountId', null);
               else setValue('reimbursementGroupId', null);
             }}
@@ -116,11 +159,18 @@ export function TransactionForm({ initial, defaults, accounts, categories, onSub
         )}
       />
 
+      {showPicker ? (
+        <RecurringIncomePicker value={recurringIncomeId ?? null} options={recurringIncomes} onChange={selectRecurringIncome} />
+      ) : null}
+
       <Controller
         control={control}
         name="amount"
         render={({ field, fieldState }) => (
-          <FormField label="Monto" error={fieldState.error?.message}>
+          <FormField
+            label="Monto"
+            error={fieldState.error?.message}
+            hint={linked ? `Valor esperado: ${formatCop(linked.expectedAmount, { hideZeroCents: true })}` : undefined}>
             <AmountInput
               value={field.value}
               onChangeText={field.onChange}
@@ -132,6 +182,11 @@ export function TransactionForm({ initial, defaults, accounts, categories, onSub
           </FormField>
         )}
       />
+      {duplicate && linked ? (
+        <AppText variant="caption" tone="warning">
+          Ya registraste {linked.name} en {linkedPeriod}. Puedes guardarlo de todas formas.
+        </AppText>
+      ) : null}
 
       <GlassCard>
         <View style={{ gap: theme.spacing(4) }}>

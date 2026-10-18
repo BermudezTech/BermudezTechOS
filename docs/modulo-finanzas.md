@@ -47,6 +47,17 @@ Módulo para configurar **gastos fijos recurrentes**.
 - Los débitos pueden generarse **en el dispositivo** (al abrir la app, para lo vencido sin conexión) **y en el servidor** (cron), de forma **atómica** e **idempotente**.
 - Para evitar duplicados entre ambos, el ID del débito es **determinista**: UUIDv5 de `(subscription_id, periodo)`. Si cliente y servidor generan el mismo cobro, al sincronizar es el mismo registro.
 
+### 4.1 Ingresos recurrentes (spec 002)
+
+Plantillas para **ingresos que se repiten** (salario, arriendo recibido, honorarios fijos).
+
+- Campos: nombre, ícono, valor esperado, periodicidad (**mensual** / **anual**), día esperado (y mes, si es anual), cuenta de destino, categoría de ingreso, activa/pausada.
+- Al registrar un ingreso, el usuario **elige la plantilla** y el formulario se llena con el valor esperado, la cuenta, la categoría y la descripción. **Todo queda editable**, en especial el valor, porque el real puede variar (horas extra, bonificaciones, descuentos).
+- Cambiar el valor de un ingreso registrado **no cambia** la plantilla, y cambiar el valor esperado de la plantilla **no cambia** los ingresos ya registrados.
+- **No hay registro automático**: a diferencia de las suscripciones, cada ingreso lo confirma el usuario.
+- Cada ingreso queda vinculado a su plantilla y a su periodo (`YYYY-MM` o `YYYY`). Si ya hay uno en el periodo, la app **avisa sin bloquear** (p. ej. la prima).
+- Las plantillas pausadas no aparecen en el selector; al eliminar una plantilla, sus ingresos registrados se conservan.
+
 ## 5. Gastos reembolsables y viáticos (aislamiento del flujo de caja)
 
 Identificación de dinero **corporativo o de terceros** para que no contamine las finanzas personales.

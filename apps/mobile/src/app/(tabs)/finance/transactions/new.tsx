@@ -6,12 +6,14 @@ import type { TransactionType } from '@/modules/finance/domain/types';
 import { useAccountOptions } from '@/modules/finance/hooks/useAccounts';
 import { createTransaction, useCategories } from '@/modules/finance/hooks/useTransactions';
 import { useGroupField } from '@/modules/finance/hooks/useGroupField';
+import { useSelectableRecurringIncomes } from '@/modules/finance/hooks/useRecurringIncomes';
 
 export default function NewTransactionScreen() {
-  const params = useLocalSearchParams<{ type?: TransactionType; accountId?: string; groupId?: string }>();
+  const params = useLocalSearchParams<{ type?: TransactionType; accountId?: string; groupId?: string; recurringIncomeId?: string }>();
   const accounts = useAccountOptions();
   const categories = useCategories();
   const renderGroupField = useGroupField();
+  const recurringIncomes = useSelectableRecurringIncomes();
   return (
     <Screen title="Nuevo movimiento" back fallback="/finance/transactions" modal>
       {accounts.length === 0 ? (
@@ -26,7 +28,13 @@ export default function NewTransactionScreen() {
         <TransactionForm
           accounts={accounts}
           categories={categories}
-          defaults={{ type: params.type, accountId: params.accountId, reimbursementGroupId: params.groupId }}
+          recurringIncomes={recurringIncomes}
+          defaults={{
+            type: params.type,
+            accountId: params.accountId,
+            reimbursementGroupId: params.groupId,
+            recurringIncomeId: params.recurringIncomeId,
+          }}
           renderGroupField={renderGroupField}
           onSubmit={async (input) => {
             await createTransaction(input);

@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { localDateTimeToUtc, localDayKey, localTimeParts, todayLocal, type IsoDate, type IsoDateTime } from '@/lib/dates';
 import { MAX_CENTS } from '@/lib/money';
 
-import type { Category, Transaction, TransactionInput, TransactionType } from '../types';
+import { periodFor } from '../recurringIncomes';
+import type { Category, RecurringIncomeCycle, Transaction, TransactionInput, TransactionType } from '../types';
 import { amountField, isoDateField, messages, optionalText } from './common';
 
 export const transactionTypes = ['INCOME', 'EXPENSE', 'TRANSFER'] as const satisfies readonly TransactionType[];
@@ -104,6 +105,8 @@ export function transactionInputSchema(categories: Map<string, Category>) {
       subscriptionId: z.string().nullable(),
       subscriptionPeriod: z.string().nullable(),
       cdtId: z.string().nullable(),
+      recurringIncomeId: z.string().nullable(),
+      recurringIncomePeriod: z.string().nullable(),
     })
     .superRefine(refineTransaction(categories));
 }
@@ -120,6 +123,10 @@ export function transactionFormSchema(categories: Map<string, Category>) {
       date: isoDateField,
       description: optionalText(500),
       reimbursementGroupId: z.string().nullable(),
+      recurringIncomeId: z
+        .string()
+        .nullish()
+        .transform((v) => v ?? null),
     })
     .superRefine(refineTransaction(categories));
 }
@@ -140,8 +147,20 @@ export function dateToOccurredAt(date: IsoDate, original?: IsoDateTime, now = ne
   return localDateTimeToUtc(date, 12, 0);
 }
 
-export function toTransactionInput(values: TransactionFormOutput, original?: Transaction): TransactionInput {
+/**
+ * `cycleOf` da la periodicidad de la plantilla vinculada; el periodo se recalcula desde la fecha
+ * local (research R4). Si la plantilla ya no existe, se infiere del periodo original.
+ */
+export function toTransactionInput(
+  values: TransactionFormOutput,
+  original?: Transaction,
+  cycleOf?: (recurringIncomeId: string) => RecurringIncomeCycle | undefined,
+): TransactionInput {
   const isTransfer = values.type === 'TRANSFER';
+  const recurringIncomeId = values.type === 'INCOME' ? values.recurringIncomeId : null;
+  const cycle = recurringIncomeId
+    ? (cycleOf?.(recurringIncomeId) ?? (original?.recurringIncomePeriod?.length === 4 ? 'YEARLY' : 'MONTHLY'))
+    : null;
   const categoryChanged = original ? original.categoryId !== values.categoryId : true;
   return {
     type: values.type,
@@ -156,5 +175,7 @@ export function toTransactionInput(values: TransactionFormOutput, original?: Tra
     subscriptionId: original?.subscriptionId ?? null,
     subscriptionPeriod: original?.subscriptionPeriod ?? null,
     cdtId: original?.cdtId ?? null,
+    recurringIncomeId,
+    recurringIncomePeriod: recurringIncomeId && cycle ? periodFor(cycle, values.date) : null,
   };
 }

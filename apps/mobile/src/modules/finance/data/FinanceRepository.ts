@@ -10,6 +10,9 @@ import type {
   GroupStatus,
   ReimbursementGroup,
   ReimbursementGroupInput,
+  RecurringIncome,
+  RecurringIncomeInput,
+  RecurringIncomeStatus,
   Subscription,
   SubscriptionInput,
   SubscriptionStatus,
@@ -46,6 +49,8 @@ export type ErrorCode =
   | 'GROUP_NOT_BALANCED'
   | 'INVALID_TRANSITION'
   | 'NOT_FOUND'
+  | 'RECURRING_INCOME_TYPE'
+  | 'INVALID_PERIOD'
   | 'INVALID';
 
 export class ValidationError extends Error {
@@ -75,6 +80,12 @@ export interface FinanceRepository {
   createSubscription(input: SubscriptionInput): Promise<Subscription>;
   updateSubscription(id: string, patch: Partial<SubscriptionInput>): Promise<Subscription>;
   setSubscriptionStatus(id: string, status: SubscriptionStatus): Promise<void>;
+
+  createRecurringIncome(input: RecurringIncomeInput): Promise<RecurringIncome>;
+  updateRecurringIncome(id: string, patch: Partial<RecurringIncomeInput>): Promise<RecurringIncome>;
+  setRecurringIncomeStatus(id: string, status: RecurringIncomeStatus): Promise<void>;
+  /** Borrado lógico; los ingresos registrados se conservan (FR-009). */
+  deleteRecurringIncome(id: string): Promise<void>;
 
   createReimbursementGroup(input: ReimbursementGroupInput): Promise<ReimbursementGroup>;
   /** SETTLED solo con saldo 0. */

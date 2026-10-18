@@ -1,12 +1,13 @@
 import { useTheme } from '@/theme';
 
-import { useMonthSummary } from '../../hooks/useMonthSummary';
+import { useCurrentMonthRange, useMonthSummary } from '../../hooks/useMonthSummary';
 import { StatCard } from './StatCard';
 
-/** Ingresos − gastos del mes; negativo se muestra en color de egreso. */
+/** Ingresos − gastos del mes; negativo se muestra en color de egreso. Abre Movimientos filtrado al mes. */
 export function MonthBalanceCard() {
   const theme = useTheme();
   const summary = useMonthSummary();
+  const range = useCurrentMonthRange();
   return (
     <StatCard
       id="month-balance"
@@ -15,7 +16,10 @@ export function MonthBalanceCard() {
       iconColor={theme.colors.transfer}
       value={summary.balance}
       variant="auto"
-      href="/finance/transactions"
+      href={{
+        pathname: '/finance/transactions',
+        params: range,
+      }}
     />
   );
 }

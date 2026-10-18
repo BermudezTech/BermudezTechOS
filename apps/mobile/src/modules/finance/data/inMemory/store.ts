@@ -66,6 +66,7 @@ export function batch(mutate: (draft: FinanceData) => void): void {
       categories: { ...s.categories },
       transactions: { ...s.transactions },
       subscriptions: { ...s.subscriptions },
+      recurringIncomes: { ...s.recurringIncomes },
       reimbursementGroups: { ...s.reimbursementGroups },
       cdts: { ...s.cdts },
       assets: { ...s.assets },

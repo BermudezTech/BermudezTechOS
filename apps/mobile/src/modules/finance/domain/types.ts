@@ -68,6 +68,10 @@ export interface TransactionInput {
   subscriptionId: string | null;
   subscriptionPeriod: string | null;
   cdtId: string | null;
+  /** Ingreso registrado desde una plantilla (solo INCOME). */
+  recurringIncomeId: string | null;
+  /** `YYYY-MM` (o `YYYY` en anuales); obligatorio si y solo si hay `recurringIncomeId`. */
+  recurringIncomePeriod: string | null;
 }
 
 export interface Transaction extends SyncFields, TransactionInput {}
@@ -89,6 +93,25 @@ export interface SubscriptionInput {
 }
 
 export interface Subscription extends SyncFields, SubscriptionInput {}
+
+export type RecurringIncomeCycle = BillingCycle;
+export type RecurringIncomeStatus = 'ACTIVE' | 'PAUSED';
+
+/** Plantilla de ingreso que se repite (specs/002-recurring-income/data-model.md). */
+export interface RecurringIncomeInput {
+  accountId: string;
+  categoryId: string | null;
+  name: string;
+  icon: string | null;
+  expectedAmount: Cents;
+  cycle: RecurringIncomeCycle;
+  expectedDay: number;
+  expectedMonth: number | null;
+  startDate: IsoDate;
+  status: RecurringIncomeStatus;
+}
+
+export interface RecurringIncome extends SyncFields, RecurringIncomeInput {}
 
 export type ReimbursementKind = 'REIMBURSEMENT' | 'ADVANCE';
 export type GroupStatus = 'OPEN' | 'SUBMITTED' | 'SETTLED';
@@ -144,6 +167,7 @@ export interface FinanceData {
   categories: Record<string, Category>;
   transactions: Record<string, Transaction>;
   subscriptions: Record<string, Subscription>;
+  recurringIncomes: Record<string, RecurringIncome>;
   reimbursementGroups: Record<string, ReimbursementGroup>;
   cdts: Record<string, Cdt>;
   assets: Record<string, Asset>;

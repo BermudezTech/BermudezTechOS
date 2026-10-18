@@ -57,6 +57,8 @@ export async function createCdt(input: CdtInput): Promise<Cdt> {
     subscriptionId: null,
     subscriptionPeriod: null,
     cdtId: cdt.id,
+    recurringIncomeId: null,
+    recurringIncomePeriod: null,
   };
   batch((draft) => {
     draft.accounts[account.id] = account;

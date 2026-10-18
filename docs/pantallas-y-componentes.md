@@ -41,9 +41,20 @@ Las rutas `new` y `edit` se abren como **modal** a pantalla completa, sin la bar
 | `finance/subscriptions/index.tsx` | Suscripciones | Gastos fijos recurrentes. |
 | `finance/subscriptions/new.tsx` | Nueva suscripción | Formulario para crear una suscripción. |
 | `finance/subscriptions/[id]/edit.tsx` | Editar suscripción | Formulario de edición de una suscripción. |
+| `finance/recurring-income/index.tsx` | Ingresos recurrentes | Lista de plantillas de ingresos fijos (salario, honorarios…), activas y pausadas. |
+| `finance/recurring-income/new.tsx` | Nuevo ingreso recurrente | Formulario para crear una plantilla con su valor esperado. |
+| `finance/recurring-income/[id]/edit.tsx` | Editar ingreso recurrente | Edición de la plantilla, más pausar/reactivar y eliminar. |
 | `finance/reimbursements/index.tsx` | Reembolsos | Grupos de viáticos, adelantos y dinero de terceros. |
 | `finance/reimbursements/new.tsx` | Nuevo grupo | Formulario para crear un grupo de reembolso. |
 | `finance/reimbursements/[id].tsx` | Detalle de grupo | Movimientos y estado de un grupo de reembolso. |
+
+### Componentes de Finanzas: ingresos recurrentes
+
+| Componente | Archivo | Descripción |
+|---|---|---|
+| `RecurringIncomeForm` | `modules/finance/components/recurringIncome/RecurringIncomeForm.tsx` | Formulario de la plantilla: nombre, ícono, valor esperado, periodicidad, día, cuenta y categoría. |
+| `RecurringIncomeListItem` | `modules/finance/components/recurringIncome/RecurringIncomeListItem.tsx` | Fila de la lista con valor esperado, periodicidad y estado. |
+| `RecurringIncomePicker` | `modules/finance/components/recurringIncome/RecurringIncomePicker.tsx` | Selector de plantilla en "Nuevo movimiento" (tipo Ingreso) que prellena el formulario. |
 
 ## Componentes de UI
 

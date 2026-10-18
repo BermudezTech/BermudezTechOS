@@ -78,6 +78,7 @@ export function buildSeed(mode: SeedMode, today: IsoDate): FinanceData {
     categories: {},
     transactions: {},
     subscriptions: {},
+    recurringIncomes: {},
     reimbursementGroups: {},
     cdts: {},
     assets: {},
@@ -208,6 +209,8 @@ export function buildSeed(mode: SeedMode, today: IsoDate): FinanceData {
       subscriptionId: null,
       subscriptionPeriod: null,
       cdtId: null,
+      recurringIncomeId: null,
+      recurringIncomePeriod: null,
       ...rest,
     };
     data.transactions[id] = tx;
@@ -237,13 +240,32 @@ export function buildSeed(mode: SeedMode, today: IsoDate): FinanceData {
     list[monthIndex] = cents((list[monthIndex] ?? 0) + value);
   };
 
+  // --- Ingreso recurrente "Salario" (spec 002): los salarios quedan vinculados con su periodo ---
+  const salaryId = nextId();
+  data.recurringIncomes[salaryId] = {
+    ...sync(salaryId),
+    accountId: checking,
+    categoryId: cat.salary,
+    name: 'Nómina Acme S.A.S.',
+    icon: 'briefcase-outline',
+    expectedAmount: cop(5_800_000),
+    cycle: 'MONTHLY',
+    expectedDay: 1,
+    expectedMonth: null,
+    startDate: day(months[0]!, 1),
+    status: 'ACTIVE',
+  };
+
   months.forEach((ym, i) => {
     add({
       accountId: checking,
       type: 'INCOME',
-      amount: cop(5_800_000),
+      // Un mes con horas extra: el valor real difiere del esperado.
+      amount: i === 10 ? cop(6_150_000) : cop(5_800_000),
       categoryId: cat.salary,
       description: 'Nómina Acme S.A.S.',
+      recurringIncomeId: salaryId,
+      recurringIncomePeriod: `${ym.year}-${String(ym.month).padStart(2, '0')}`,
       on: day(ym, 1),
       hour: 8,
     });

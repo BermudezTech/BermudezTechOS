@@ -74,6 +74,13 @@ export const financeSections: FinanceSection[] = [
     route: '/finance/subscriptions',
   },
   {
+    id: 'recurring-income',
+    label: 'Ingresos recurrentes',
+    description: 'Salario y otros ingresos fijos',
+    icon: 'cash-outline',
+    route: '/finance/recurring-income',
+  },
+  {
     id: 'reimbursements',
     label: 'Reembolsos',
     description: 'Viáticos, adelantos y dinero de terceros',
