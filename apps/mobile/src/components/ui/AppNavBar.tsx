@@ -1,15 +1,16 @@
 import { usePathname } from 'expo-router';
 import { TabTrigger, type TabTriggerSlotProps } from 'expo-router/ui';
 import { useState, type ComponentRef, type Ref } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import logo from '@/assets/images/logo.png';
 import { activeModules, appModules, comingSoonModules, type AppModule } from '@/modules/registry';
 import { useTheme } from '@/theme';
 
 import { AppText } from './AppText';
 import { GlassSurface } from './GlassSurface';
-import { Icon, IconBadge } from './Icon';
+import { Icon } from './Icon';
 import { isModalPath } from './layout';
 
 export const BOTTOM_BAR_HEIGHT = 64;
@@ -93,7 +94,7 @@ export function SideNav() {
       accessibilityRole="tablist"
       style={[styles.side, { width: theme.layout.sideNavWidth, marginTop: insets.top + 12, padding: theme.spacing(3) }]}>
       <View style={[styles.brand, { paddingHorizontal: theme.spacing(2) }]}>
-        <IconBadge name="sparkles" size={36} />
+        <Image source={logo} style={{ width: 36, height: 36 }} accessibilityIgnoresInvertColors accessible={false} />
         <AppText variant="heading" numberOfLines={1}>
           BermudezTechOS
         </AppText>
