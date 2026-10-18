@@ -36,13 +36,14 @@ Aplicación hecha a la medida para organizar la vida personal (multiusuario): fi
 - **Backups:** cron en el servidor con `pg_dump` → carpeta de Google Drive.
 - **UI:** look moderno con estética *liquid glass* (glassmorphism), colores vibrantes y animaciones fluidas.
 
-## Estructura del repositorio (propuesta)
+## Estructura del repositorio
 
 ```
 BermudezTechOS/
 ├── apps/
 │   ├── mobile/      # App React Native (Expo) — Android + Web
 │   └── api/         # Backend FastAPI
+├── docs/           # Documentación
 ├── specs/           # Especificaciones de Spec Kit (por feature)
 ├── .specify/        # Plantillas, scripts y constitución de Spec Kit
 └── .claude/         # Skills/comandos para Claude Code
@@ -60,4 +61,27 @@ Este repo usa [Spec Kit](https://github.com/github/spec-kit). Flujo de trabajo:
 
 ## Primeros pasos
 
-> Se completará cuando exista el código de `apps/mobile` y `apps/api`.
+### App (`apps/mobile`)
+
+Requisitos: Node.js LTS (≥ 20) y npm. Para Android, un dispositivo con Expo Go/development build o un emulador.
+
+```bash
+cd apps/mobile
+npm install
+npx expo start        # "a" para Android, "w" para web
+```
+
+| Comando | Qué hace |
+|---|---|
+| `npm test` | Pruebas unitarias (montos, fechas, dominio de finanzas, formulario de movimiento, contraste del tema) |
+| `npm run lint` | ESLint (config de Expo) |
+| `npm run typecheck` | TypeScript estricto (`tsc --noEmit`) |
+| `npm run format` | Formatea con Prettier |
+
+> En esta fase la app usa **datos de prueba en memoria**: no hay base de datos, sincronización ni inicio de sesión. Los cambios se pierden al recargar; en **Ajustes → Datos de prueba** se pueden restablecer o vaciar para revisar los estados vacíos.
+
+Escenarios de validación: [`specs/001-finance-ui-mockup/quickstart.md`](specs/001-finance-ui-mockup/quickstart.md).
+
+### API (`apps/api`)
+
+> Se completará con la feature de backend.

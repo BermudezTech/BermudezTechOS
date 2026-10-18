@@ -1,50 +1,124 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report
+- Version change: (plantilla sin completar) → 1.0.0
+- Principios definidos (nuevos):
+  I. Offline-first
+  II. Sincronización incremental y determinista
+  III. Aislamiento multiusuario y seguridad
+  IV. Precisión monetaria y temporal
+  V. Modularidad y alcance controlado
+  VI. Experiencia multiplataforma liquid glass
+- Secciones añadidas: Restricciones técnicas e infraestructura; Flujo de trabajo y calidad; Governance
+- Secciones eliminadas: ninguna
+- Plantillas: no modificadas (leen la constitución en tiempo de ejecución)
+- TODOs diferidos: ninguno
+-->
+
+# BermudezTechOS Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Offline-first
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+- La UI MUST leer y escribir siempre en la base local del dispositivo; ninguna interacción del
+  usuario puede bloquearse esperando la red.
+- Cada registro sincronizable MUST tener ID generado en el cliente (UUID), `created_at`,
+  `updated_at`, borrado lógico (`deleted_at`) y estado de sincronización (`is_dirty`).
+- Sin conexión, la app MUST seguir funcionando con los datos locales.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+**Rationale**: el uso principal es móvil y con conectividad intermitente; registrar un gasto
+debe ser instantáneo.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### II. Sincronización incremental y determinista
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+- El orden MUST ser PUSH y luego PULL.
+- PUSH aplica last-write-wins: el servidor solo sobrescribe si el `updated_at` entrante es más
+  reciente que el almacenado.
+- El cursor de PULL MUST ser una marca asignada por el servidor (`server_updated_at`), nunca el
+  reloj del dispositivo, e incluye borrados lógicos.
+- `sync_metadata` guarda el último sync exitoso por tabla y MUST actualizarse solo tras completar
+  PUSH y PULL de esa tabla; solo el primer sync descarga todo.
+- Toda operación de sync y de generación automática (p. ej. débitos de suscripciones) MUST ser
+  idempotente; los registros que puedan generar cliente y servidor usan IDs deterministas (UUIDv5).
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+**Rationale**: evita pérdida de cambios por desfase de relojes y duplicados por reintentos.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. Aislamiento multiusuario y seguridad
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+- Toda tabla de datos del servidor MUST llevar `user_id`, y el servidor MUST filtrar siempre por
+  el usuario del JWT; nunca se confía en un `user_id` enviado por el cliente.
+- `user_id` existe solo en el servidor; la base local no lo almacena y se borra al cerrar sesión.
+- Autenticación con access token de corta duración + refresh token, guardados en almacenamiento
+  seguro del dispositivo (o su equivalente seguro en web).
+- Secretos y claves de terceros (p. ej. modelos de IA) MUST vivir solo en el backend, en variables
+  de entorno; `.env` fuera de git y `.env.example` versionado.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+**Rationale**: la app maneja datos financieros personales de varios usuarios.
+
+### IV. Precisión monetaria y temporal
+
+- Los montos MUST usar tipos decimales exactos, nunca punto flotante: `NUMERIC(14,2)` /
+  `Decimal` en servidor, string en JSON, centavos enteros o librería decimal en el cliente.
+- Todo monto MUST ir acompañado de su moneda (COP en el MVP).
+- Los saldos MUST derivarse de las transacciones; no se almacenan como valor editable.
+- Fechas en UTC en almacenamiento; conversión a zona local solo al mostrar.
+
+**Rationale**: `0.1 + 0.2 ≠ 0.3`; un error de centavos destruye la confianza en una app de
+finanzas.
+
+### V. Modularidad y alcance controlado
+
+- El MVP implementa solo el módulo de finanzas; otros módulos (rutinas, calendario, to-do,
+  hábitos) MUST NOT implementarse sin petición explícita.
+- Modelos, navegación y estructura MUST permitir añadir módulos nuevos sin reescribir los
+  existentes.
+- Monorepo con `apps/mobile` (cliente) y `apps/api` (backend).
+- Se prefiere la solución más simple que cumpla la spec; la complejidad adicional se justifica en
+  el plan.
+
+**Rationale**: entregar valor pronto sin cerrar la puerta a la visión completa de la app.
+
+### VI. Experiencia multiplataforma liquid glass
+
+- El cliente MUST funcionar en Android (objetivo principal) y web con las mismas funcionalidades;
+  toda dependencia de plataforma (p. ej. SQLite en web) se verifica antes de depender de ella.
+- Estética liquid glass (translucidez con blur, colores vibrantes, bordes suaves, animaciones
+  fluidas) definida en un sistema de tokens centralizado con modo claro y oscuro.
+- El rendimiento en Android de gama media MUST priorizarse: capas de blur limitadas y animaciones
+  en el hilo nativo.
+- La interfaz y la documentación están en español; los identificadores de código en inglés.
+
+**Rationale**: la identidad visual es parte del producto, pero no a costa de la fluidez.
+
+## Restricciones técnicas e infraestructura
+
+- **Cliente:** React Native + Expo (TypeScript estricto), Expo SQLite como fuente de verdad local.
+- **Backend:** Python + FastAPI, type hints y Pydantic; SQLAlchemy 2 (async) + Alembic. No Prisma.
+- **Base de datos:** PostgreSQL.
+- **Contenedores y despliegue:** Docker Compose (API + PostgreSQL) compatible con Coolify:
+  configuración por variables de entorno, healthchecks y volúmenes persistentes.
+- **Migraciones:** Alembic se ejecuta al arrancar/desplegar la API.
+- **Backups:** `pg_dump` programado hacia Google Drive con retención definida y pruebas de
+  restauración periódicas.
+
+## Flujo de trabajo y calidad
+
+- Las features no triviales MUST seguir Spec Kit: specify → plan → tasks → implement; no se
+  implementa sin spec y plan aprobados. Specs en `specs/`.
+- Cada plan MUST incluir una verificación explícita contra esta constitución (Constitution Check).
+- La lógica de cálculo de montos/saldos y la de sincronización MUST tener pruebas automatizadas.
+- Commits pequeños y descriptivos; no se hace commit ni push sin solicitud explícita.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+- Esta constitución prevalece sobre otras prácticas del repositorio; `CLAUDE.md` es la guía
+  operativa de desarrollo y MUST mantenerse coherente con ella.
+- **Enmiendas:** se proponen con `/speckit-constitution`, documentando el cambio en el Sync Impact
+  Report y revisando el impacto en specs y planes activos.
+- **Versionado semántico:** MAJOR para eliminar o redefinir principios de forma incompatible;
+  MINOR para añadir principios/secciones o ampliar guías de forma material; PATCH para
+  aclaraciones y redacción.
+- **Cumplimiento:** cada plan y cada revisión de código verifican los principios; toda desviación
+  MUST justificarse por escrito en el plan (sección de complejidad).
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-17
