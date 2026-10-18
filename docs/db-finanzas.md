@@ -19,7 +19,8 @@
 - El cliente **no** tiene columna `user_id` ni la envía en el PUSH; el servidor la asigna a partir del JWT al insertar.
 - En el PULL, el servidor devuelve solo registros del usuario autenticado y omite `user_id` en la respuesta.
 - La base local contiene únicamente los datos del usuario autenticado. Al cerrar sesión se **borra la base local** (o se usa un archivo SQLite por usuario), para que otro usuario en el mismo dispositivo nunca vea esos datos.
-- Índices del servidor: `user_id` va como primera columna en los índices compuestos.
+- Índices del servidor: `user_id` va como primera columna en los índices compuestos de consulta por usuario (los índices de §3 sobre una sola FK, como `counter_account_id`, no lo necesitan).
+- **Aislamiento en la base de datos** (spec 003): cada tabla de datos tiene `UNIQUE (user_id, id)` y toda FK entre tablas de datos es **compuesta**: `(user_id, account_id) → accounts(user_id, id)`. Así PostgreSQL rechaza una referencia a un registro de otro usuario aunque falle la lógica de la aplicación. Con `MATCH SIMPLE` (por defecto) una FK con columna nula no se verifica, y usan `NO ACTION` para que el borrado en cascada de un usuario funcione.
 
 **Columnas de sincronización** — presentes en todas las tablas sincronizables (se omiten en las tablas de abajo):
 
@@ -95,13 +96,16 @@ Para `LIABILITY` el mismo cálculo da un valor negativo = deuda. Si el rendimien
 
 ## 2. `categories` — Categorías de gasto e ingreso (§2, §6, §11)
 
-Categorías con las que el usuario clasifica sus movimientos: **Educación, Entretenimiento, Transporte, Alimentación, Salud, Hogar, Servicios, Salario…** Cada usuario tiene las suyas; al registrarse se crea un set inicial (seed) que puede editar.
+Categorías con las que el usuario clasifica sus movimientos. Cada usuario tiene las suyas; al registrarse se crea un set inicial (seed) que puede editar. Se crea cada vez que se registra un usuario, en la misma transacción (hoy, con la seed del primer despliegue):
+
+- **Gasto:** Transporte, Alimentación, Entretenimiento, Suscripciones, Servicios, Mercado, Combustible, Parqueadero, Salud, Fitness, Viajes y Ropa.
+- **Ingreso:** Salario, Rendimientos y Otros ingresos.
 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
 | `id` | UUID | PK | |
 | `user_id` | UUID | FK → users.id, NOT NULL | Dueño del registro. **Solo servidor.** |
-| `name` | VARCHAR(50) | NOT NULL | "Transporte". UNIQUE (`user_id`, `name`, `kind`). |
+| `name` | VARCHAR(50) | NOT NULL | "Transporte". Único (`user_id`, `name`, `kind`) entre las **no borradas** (índice parcial `WHERE deleted_at IS NULL`): una categoría borrada no bloquea su nombre. |
 | `kind` | VARCHAR(10) | NOT NULL, CHECK | `INCOME` / `EXPENSE`. |
 | `icon` / `color` | VARCHAR(50) | NULL | Para la UI y el dashboard (§11). |
 | `sort_order` | INT | NOT NULL DEFAULT 0 | |
@@ -270,5 +274,37 @@ Plantillas de ingresos que se repiten (salario, arriendo recibido, honorarios). 
 | `password_hash` | VARCHAR(255) | NOT NULL |
 | `display_name` | VARCHAR(100) | NULL |
 | `created_at` | TIMESTAMPTZ | NOT NULL |
+| `updated_at` | TIMESTAMPTZ | NOT NULL. Cambia al restablecer la contraseña. |
 
-**`refresh_tokens`** — *solo servidor*: `id`, `user_id`, `token_hash`, `expires_at`, `revoked_at`.
+No hay registro público: el primer usuario lo crea la seed del primer despliegue a partir de variables de entorno.
+
+**`refresh_tokens`** — *solo servidor*
+
+| Columna | Tipo | Restricciones |
+|---|---|---|
+| `id` | UUID | PK |
+| `user_id` | UUID | NOT NULL, FK → users.id ON DELETE CASCADE |
+| `session_id` | UUID | NOT NULL. Sesión de un dispositivo: la crea el login y la heredan los tokens sucesores. |
+| `token_hash` | CHAR(64) | NOT NULL, UNIQUE. SHA-256 del token opaco. |
+| `expires_at` | TIMESTAMPTZ | NOT NULL. Emisión + 7 días. |
+| `revoked_at` | TIMESTAMPTZ | NULL |
+| `replaced_by_id` | UUID | NULL, FK → refresh_tokens.id. Sucesor en la rotación. |
+| `created_at` | TIMESTAMPTZ | NOT NULL |
+
+Un usuario puede tener varias sesiones activas a la vez (una por dispositivo, sin límite). Cada renovación rota el token dentro de su sesión; reutilizar un token ya rotado revoca **solo esa sesión**. Restablecer la contraseña revoca todas.
+
+**`password_reset_codes`** — *solo servidor*: código de recuperación de 6 dígitos y, una vez validado, el permiso para cambiar la contraseña.
+
+| Columna | Tipo | Restricciones |
+|---|---|---|
+| `id` | UUID | PK |
+| `user_id` | UUID | NOT NULL, FK → users.id ON DELETE CASCADE |
+| `code_hash` | CHAR(64) | NOT NULL. HMAC-SHA256 con *pepper* de `user_id:código`. |
+| `expires_at` | TIMESTAMPTZ | NOT NULL. Creación + 30 min. |
+| `failed_attempts` | SMALLINT | NOT NULL DEFAULT 0, 0–5. Al 5.º fallo el código se invalida. |
+| `used_at` / `invalidated_at` | TIMESTAMPTZ | NULL |
+| `grant_hash` | CHAR(64) | NULL, UNIQUE. SHA-256 del permiso de cambio. |
+| `grant_expires_at` / `grant_used_at` | TIMESTAMPTZ | NULL. El permiso dura 10 min. |
+| `created_at` | TIMESTAMPTZ | NOT NULL. Cuenta el límite de 3 solicitudes por hora. |
+
+**`login_attempts`** — *solo servidor*: fallos de inicio de sesión para el bloqueo por correo + IP (5 fallos en 15 min bloquean 15 min). `id` BIGINT identity, `email` VARCHAR(255), `ip` INET, `attempted_at` TIMESTAMPTZ. Índice (`email`, `ip`, `attempted_at`). No es dato del usuario: el correo puede no existir.

@@ -84,4 +84,36 @@ Escenarios de validación: [`specs/001-finance-ui-mockup/quickstart.md`](specs/0
 
 ### API (`apps/api`)
 
-> Se completará con la feature de backend.
+FastAPI + PostgreSQL. Cada módulo tiene un **controlador** (rutas) y un **servicio** (lógica), al estilo NestJS. Todas las rutas exigen sesión salvo las marcadas con `@public`, y cada usuario solo ve sus propios datos.
+
+Requisitos: Docker con Compose v2. Para desarrollar fuera de Docker y correr las pruebas, [uv](https://docs.astral.sh/uv/) y Python 3.13+.
+
+**Levantar API + base de datos:**
+
+```bash
+cp apps/api/.env.example .env      # en la raíz del repo (lo lee docker compose)
+# Completa en .env:
+#   POSTGRES_PASSWORD y la misma clave en DATABASE_URL
+#   JWT_SECRET y PASSWORD_RESET_PEPPER  → openssl rand -base64 48
+#   INITIAL_USER_EMAIL / INITIAL_USER_PASSWORD / INITIAL_USER_DISPLAY_NAME
+docker compose up --build
+```
+
+- La API queda en `http://localhost:8000`, con la documentación interactiva en `/docs` (solo en desarrollo) y el estado en `/health`.
+- Al arrancar se aplican las migraciones (Alembic) y luego la **seed**: si la base no tiene usuarios, crea el usuario de `INITIAL_USER_*` con su set inicial de categorías. Si ya existe un usuario, no hace nada. Si faltan esas variables con la base vacía, el contenedor no arranca e indica qué variable falta. No hay registro desde la app; se recomienda borrar `INITIAL_USER_PASSWORD` tras el primer despliegue.
+- **Recuperación de contraseña:** necesita `RESEND_API_KEY` y `MAIL_FROM` (remitente verificado en Resend). Sin ellas la API funciona, pero no envía correos.
+- **Coolify:** despliega `docker-compose.yml` (sin puertos publicados; `docker-compose.override.yml` es solo local). Configura `FORWARDED_ALLOW_IPS` con la red del proxy para que el bloqueo de inicio de sesión vea la IP real del cliente.
+
+**Desarrollo** (en `apps/api`):
+
+| Comando | Qué hace |
+|---|---|
+| `uv sync` | Instala dependencias (incluidas las de desarrollo) |
+| `uv run uvicorn app.main:app --reload` | API local; usa `apps/api/.env` con `localhost` en `DATABASE_URL` |
+| `uv run python -m app.bootstrap` | Migraciones + seed manuales |
+| `uv run alembic revision --autogenerate -m "<msg>"` | Nueva migración |
+| `uv run pytest` | Pruebas contra PostgreSQL real (testcontainers, o `TEST_DATABASE_URL`) |
+| `uv run ruff check . && uv run ruff format --check .` | Lint y formato |
+| `uv run mypy app` | Tipos (modo estricto) |
+
+Contrato de la API, variables y escenarios de validación: [`specs/003-backend-jwt-auth/`](specs/003-backend-jwt-auth/) ([quickstart](specs/003-backend-jwt-auth/quickstart.md)).

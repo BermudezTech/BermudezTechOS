@@ -1,0 +1,53 @@
+# API + PostgreSQL. Es el archivo que despliega Coolify (sin puertos publicados: lo enruta su proxy).
+# En desarrollo, `docker compose up` añade docker-compose.override.yml (puertos y .env).
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD es obligatoria}
+      POSTGRES_DB: ${POSTGRES_DB:-bermudeztech}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./apps/api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL es obligatoria}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET es obligatoria}
+      PASSWORD_RESET_PEPPER: ${PASSWORD_RESET_PEPPER:?PASSWORD_RESET_PEPPER es obligatoria}
+      INITIAL_USER_EMAIL: ${INITIAL_USER_EMAIL:-}
+      INITIAL_USER_PASSWORD: ${INITIAL_USER_PASSWORD:-}
+      INITIAL_USER_DISPLAY_NAME: ${INITIAL_USER_DISPLAY_NAME:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      DOCS_ENABLED: ${DOCS_ENABLED:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  pgdata:

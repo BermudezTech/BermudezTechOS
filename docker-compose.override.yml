@@ -1,0 +1,13 @@
+# Solo desarrollo local: `docker compose up` lo aplica automáticamente. Coolify no lo usa.
+# Las variables se leen del `.env` de la raíz del repo (copia de apps/api/.env.example).
+services:
+  db:
+    ports:
+      # Puerto del host configurable por si ya hay otro Postgres local en 5432.
+      - "${DB_HOST_PORT:-5433}:5432"
+
+  api:
+    environment:
+      DOCS_ENABLED: "true"
+    ports:
+      - "8000:8000"
