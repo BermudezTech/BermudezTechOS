@@ -1,6 +1,7 @@
 """Errores de la aplicación y el sobre común `{"error": {code, message, details}}`."""
 
 import logging
+from collections.abc import Sequence
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -124,6 +125,14 @@ def _field_name(location: tuple[Any, ...]) -> str:
     return ".".join(to_camel(part) for part in parts)
 
 
+def validation_details(errors: Sequence[Any]) -> list[dict[str, Any]]:
+    """Errores de Pydantic → `[{field, message}]` en camelCase y en español."""
+    return [
+        {"field": _field_name(tuple(error["loc"])), "message": _validation_message(error)}
+        for error in errors
+    ]
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def _app_error(_: Request, exc: AppError) -> JSONResponse:
@@ -131,11 +140,9 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
-        details = [
-            {"field": _field_name(tuple(error["loc"])), "message": _validation_message(error)}
-            for error in exc.errors()
-        ]
-        return _envelope(422, "VALIDATION_ERROR", "Datos inválidos.", details)
+        return _envelope(
+            422, "VALIDATION_ERROR", "Datos inválidos.", validation_details(exc.errors())
+        )
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(_: Request, exc: StarletteHTTPException) -> JSONResponse:

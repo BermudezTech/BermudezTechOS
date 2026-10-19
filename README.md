@@ -116,4 +116,6 @@ docker compose up --build
 | `uv run ruff check . && uv run ruff format --check .` | Lint y formato |
 | `uv run mypy app` | Tipos (modo estricto) |
 
+**Sincronización:** los datos de finanzas no tienen rutas por entidad. La app (offline-first) envía sus cambios con `POST /api/v1/sync/push` y recibe los del servidor con `POST /api/v1/sync/pull`, ambos para todas las tablas. Contrato y escenarios: [`specs/004-data-sync/`](specs/004-data-sync/) ([contrato](specs/004-data-sync/contracts/http-api.md), [quickstart](specs/004-data-sync/quickstart.md)).
+
 Contrato de la API, variables y escenarios de validación: [`specs/003-backend-jwt-auth/`](specs/003-backend-jwt-auth/) ([quickstart](specs/003-backend-jwt-auth/quickstart.md)).

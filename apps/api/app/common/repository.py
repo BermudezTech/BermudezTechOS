@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Sequence
 from typing import Any, ClassVar, cast
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.clock import Clock
@@ -43,10 +43,14 @@ class UserScopedRepository[ModelT]:
         return cast(Sequence[ModelT], (await self._session.scalars(query)).all())
 
     async def add(self, instance: ModelT) -> ModelT:
-        """Asigna siempre el dueño y la marca del servidor, aunque vengan otros valores."""
+        """Asigna siempre el dueño y la marca del servidor, aunque vengan otros valores.
+
+        La marca sale del reloj de la base (`clock_timestamp()`), no de `Clock`: los cursores del
+        PULL necesitan una sola fuente de tiempo aunque haya varias réplicas de la API.
+        """
         owned = cast(Any, instance)
         owned.user_id = self._user_id
-        owned.server_updated_at = self._clock.now()
+        owned.server_updated_at = func.clock_timestamp()
         self._session.add(instance)
         await self._session.flush()
         return instance
@@ -55,5 +59,5 @@ class UserScopedRepository[ModelT]:
         owned = cast(Any, instance)
         if owned.user_id != self._user_id:
             raise ValueError("El registro no pertenece al usuario de la sesión")
-        owned.server_updated_at = self._clock.now()
+        owned.server_updated_at = func.clock_timestamp()
         await self._session.flush()

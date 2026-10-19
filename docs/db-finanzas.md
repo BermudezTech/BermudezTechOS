@@ -262,8 +262,10 @@ Plantillas de ingresos que se repiten (salario, arriendo recibido, honorarios). 
 | Columna | Tipo | Restricciones | Descripción |
 |---|---|---|---|
 | `table_name` | TEXT | PK | `accounts`, `transactions`… |
-| `last_pulled_server_at` | TEXT (TIMESTAMPTZ) | NULL | Máximo `server_updated_at` recibido en el último PULL exitoso. NULL = nunca sincronizada (sync completo). |
+| `pull_cursor` | TEXT | NULL | Cursor opaco que devolvió el servidor en el último PULL completo de la tabla; la app lo reenvía sin interpretarlo. NULL = nunca sincronizada (sync completo). |
 | `last_synced_at` | TEXT (TIMESTAMPTZ) | NULL | Hora local del último sync exitoso (solo informativo/UI). |
+
+**Sincronización** (spec 004): un solo par de rutas para todas las tablas, `POST /api/v1/sync/push` y `POST /api/v1/sync/pull`. El PUSH aplica last-write-wins y responde un resultado por registro; el PULL entrega los cambios en orden de dependencias (categorías y cuentas antes que transacciones), paginado y con los borrados lógicos (`deleted_at`). Borrar es editar `deleted_at`: no hay ruta de eliminación. Contrato: [`specs/004-data-sync/contracts/http-api.md`](../specs/004-data-sync/contracts/http-api.md).
 
 **`users`** — *solo servidor* (autenticación JWT)
 

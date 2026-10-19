@@ -50,7 +50,8 @@ def build_default_categories(user_id: uuid.UUID, now: datetime) -> list[Category
             sort_order=default.sort_order,
             created_at=now,
             updated_at=now,
-            server_updated_at=now,
+            # Sin `server_updated_at`: lo asigna la base (clock_timestamp()), la misma fuente que
+            # usa el sync para sus cursores.
         )
         for default in DEFAULT_CATEGORIES
     ]
