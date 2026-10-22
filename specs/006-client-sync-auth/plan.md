@@ -41,14 +41,16 @@ Sin `NEEDS CLARIFICATION`: todas las incógnitas se resolvieron en [research.md]
 | Principio | Verificación | Estado |
 |---|---|---|
 | **I. Offline-first** | La UI lee del espejo de SQLite y escribe en SQLite antes de reflejar (R2). Ninguna pantalla espera a la red. Cada registro tiene UUID del cliente, `created_at`, `updated_at`, `deleted_at` e `is_dirty` (data-model §1). Con sesión vencida o sin red, la app sigue funcionando (FR-031, R6). | ✅ |
-| **II. Sync incremental y determinista** | PUSH antes que PULL (R8). LWW lo decide el servidor; localmente, FR-017 con `updatedAt` estricto. Cursor opaco del servidor, guardado por tabla solo tras PUSH completo y PULL completo de esa tabla (R8.5). Idempotente: upsert por id y ack condicionado (R8). Solo el primer sync (o un reset explícito, R9) descarga la tabla completa. | ✅ (ver nota R9) |
+| **II. Sync incremental y determinista** | PUSH antes que PULL (R8). LWW lo decide el servidor; localmente, FR-017 con `updatedAt` estricto. Cursor opaco del servidor, guardado por tabla solo tras PUSH completo y PULL completo de esa tabla (R8.5). Idempotente: upsert por id y ack condicionado (R8). Solo el primer sync (o un reset explícito, R9) descarga la tabla completa. | ✅ |
 | **III. Aislamiento y seguridad** | Sin `user_id` en SQLite; el dueño de los datos vive en el perfil de la sesión (R12). Tokens en SecureStore/`localStorage`, nunca en SQLite ni logs (R5). Al cerrar sesión se vacía la base local (R13). Access corto + refresh rotado (R6). | ✅ |
 | **IV. Precisión monetaria y temporal** | Centavos enteros en SQLite (`INTEGER`), conversión por texto a string decimal en la API (R15), tasas como string. UTC en almacenamiento. Saldos derivados (sin cambios). Pruebas con valores que fallan en float. | ✅ |
 | **V. Modularidad y alcance** | Solo finanzas. Los módulos futuros añadidos bajo `(app)/` quedan privados por defecto (FR-039). `@/db`, `@/api`, `@/session` y `@/sync` son transversales; añadir una tabla es registrarla en el mapa de columnas y el de dependencias. Sin cambios de backend. | ✅ |
 | **VI. Multiplataforma liquid glass** | SQLite en web verificado con un spike antes de migrar pantallas (R1, quickstart §0). Pantallas nuevas con los componentes y tokens existentes. Las tareas de sync no bloquean el hilo de UI (async, sin animaciones nuevas). | ✅ |
 | **Flujo y calidad** | Spec y clarificaciones aprobadas; pruebas automatizadas para la lógica de sync y de montos (R16). | ✅ |
 
-**Nota R9**: forzar un PULL completo de una tabla tras un `DISCARDED` o un descarte manual no contradice "solo el primer sync descarga todo": es puntual, por tabla, y evita cambiar el backend. Se registra en Complexity Tracking por transparencia.
+**Nota R9**: el PULL completo puntual de una tabla tras `DISCARDED`, un descarte manual o `INVALID_CURSOR` está permitido por el principio II (constitución v1.1.0).
+
+**Nota R5**: la sesión en `localStorage` en web está permitida por el principio III (v1.1.0), con CSP estricta y sin scripts de terceros.
 
 **Re-check post-diseño (Phase 1)**: data-model, contratos y quickstart mantienen todos los puntos anteriores. No se introducen violaciones nuevas. ✅
 
@@ -118,6 +120,5 @@ Pruebas junto al código (`*.test.ts`), como hoy: `src/sync/*.test.ts`, `src/db/
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| PULL completo puntual de una tabla tras `DISCARDED` o "Descartar mi cambio" (R9) | La app necesita la versión actual del servidor de un registro que no volverá a llegar con el cursor vigente. | Una ruta "traer por ID" exige cambiar el backend (fuera de alcance). Guardar una copia por registro de la versión del servidor duplica la base. |
 | Espejo en memoria de SQLite (R2) además de la base | Mantiene sin cambios ~40 pantallas, hooks y pruebas que leen el store síncronamente. | Reescribir todos los hooks a consultas async multiplicaría el alcance y el riesgo sin beneficio con el volumen del MVP. |
 | Mutex de escritura en JS (R3) | `withTransactionAsync` no es exclusiva y `withExclusiveTransactionAsync` no existe en web; FR-011 exige atomicidad. | Usar transacciones distintas por plataforma duplica el camino crítico y deja web sin garantía. |

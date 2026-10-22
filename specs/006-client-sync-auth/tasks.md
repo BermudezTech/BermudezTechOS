@@ -57,7 +57,8 @@ description: "Tareas para la base local, la sincronización y el inicio de sesi�
 - [ ] T003 Replace `MOB/app.json` with `MOB/app.config.ts`, keeping every existing field. Then:
   - add the plugins `"expo-sqlite"` and `["expo-secure-store", { "configureAndroidBackup": true }]`;
   - add `["expo-build-properties", { "android": { "usesCleartextTraffic": true } }]` **only when** `process.env.APP_VARIANT === 'development'` (research R17);
-  - add the COOP/COEP headers to the `expo-router` plugin `headers` option for web hosting, as documented for SDK 58.
+  - add the COOP/COEP headers to the `expo-router` plugin `headers` option for web hosting, as documented for SDK 58;
+  - add a strict `Content-Security-Policy` for web hosting (constitution III v1.1.0): `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' <API origin>`, no `unsafe-inline`/`unsafe-eval`. Verify in T021 that SQLite WASM still loads with it.
 - [ ] T004 [P] In `MOB/eas.json`, set `"env": { "APP_VARIANT": "development" }` on the `development` build profile.
 - [ ] T005 [P] Create `MOB/.env.example` containing `EXPO_PUBLIC_API_URL=http://192.168.1.10:8000/api/v1`, with a comment explaining it (LAN IP for Android, `http://localhost:8000/api/v1` for web). Ensure `.env` is ignored in `MOB/.gitignore`.
 - [ ] T006 [P] Create `SRC/config/env.ts`, which exports `apiBaseUrl`. It reads `process.env.EXPO_PUBLIC_API_URL`, strips any trailing `/`, and throws a clear Spanish error at import time if the value is missing or not an `http(s)` URL.
@@ -118,7 +119,7 @@ description: "Tareas para la base local, la sincronización y el inicio de sesi�
   - two concurrent `withWriteLock` calls run sequentially;
   - a throwing task rolls back its writes and releases the lock;
   - order is FIFO.
-- [ ] T014 Create `SRC/db/openLocalDb.ts`. `openLocalDb()` calls `SQLite.openDatabaseAsync('bermudeztech.db')`, runs `migrate`, calls `setLockedDb` and returns the db. It also exports `getDb()`, which throws if the db is not open yet.
+- [ ] T014 Create `SRC/db/openLocalDb.ts`. `openLocalDb()` is idempotent: if the db is already open it returns it (concurrent calls share one promise); otherwise it calls `SQLite.openDatabaseAsync('bermudeztech.db')`, runs `migrate`, calls `setLockedDb` and returns the db. It also exports `getDb()`, which throws if the db is not open yet.
 - [ ] T015 Create `SRC/db/rows.ts`, with pure converters driven by `SRC/sync/tables.ts`:
   - `rowToEntity(table, row)`: SQLite row → domain type; `bool` 0/1 → boolean; money stays an integer `Cents` via `cents()`; drops `server_updated_at` and `is_dirty`;
   - `entityToRow(table, entity)`: domain → column/value map.
@@ -278,7 +279,7 @@ description: "Tareas para la base local, la sincronización y el inicio de sesi�
   - delete `FIN/data/mock/` (`seed.ts`, `seed.test.ts`), `FIN/hooks/useMockData.ts`, and `seededId` from `SRC/lib/ids.ts`;
   - in `SRC/app/(app)/(tabs)/settings.tsx`, delete the "datos de prueba" section and its imports.
 
-  Run `grep -rn "mock\|seed" SRC` and make sure nothing related remains (SC-010).
+  Run `grep -rnE "seed|mockUser|useMockData|seededId|MockData" SRC` and make sure nothing matches (SC-010). Jest's `.mock.calls` in tests is legitimate and is not matched.
 - [ ] T050 [US2] Open the database and hydrate at boot. In `SRC/app/_layout.tsx`, after `restoreSession()`, when `status === 'signedIn'`, call `openLocalDb()` and then `hydrate(getDb())`, both before hiding the splash. Opening the DB on sign-in is wired in US3 (T066).
 - [ ] T051 [P] [US2] Create `SRC/db/webTabLock.web.ts` and a native no-op `SRC/db/webTabLock.ts` (research R4):
   - `acquireTabLock(): Promise<boolean>` uses `navigator.locks.request('bermudeztech-db', { ifAvailable: true }, …)` and holds the lock with a never-resolving promise;
@@ -380,7 +381,7 @@ description: "Tareas para la base local, la sincronización y el inicio de sesi�
   - `syncNow()`;
   - dependencies are injectable for tests.
 - [ ] T065 [US3] Create `SRC/sync/index.ts`, which wires a singleton engine and scheduler to `getDb()`, `api` and the finance mirror (`applyRows`). Export `startSync()`, `stopSync()` and `syncNow()`.
-- [ ] T066 [US3] In `SRC/app/(app)/_layout.tsx`, on mount: ensure the DB is open and hydrated (needed after a fresh `signIn`, which happens after boot), then `startSync()`; on unmount, `stopSync()`. With an empty local DB, this first run is the initial sync (FR-025).
+- [ ] T066 [US3] In `SRC/app/(app)/_layout.tsx`, on mount: call `openLocalDb()` (no-op if already open, T014) and hydrate only if the mirror is not hydrated yet (needed after a fresh `signIn`, which happens after boot), then `startSync()`; on unmount, `stopSync()`. With an empty local DB, this first run is the initial sync (FR-025).
 - [ ] T067 [US3] On Inicio (`SRC/app/(app)/(tabs)/index.tsx`), show a non-blocking `GlassCard` with an activity indicator and the text "Descargando tus datos…" while `initialSyncComplete === false` (FR-025). If the last run failed, show "La descarga no terminó; se reintentará automáticamente."
 
 **Checkpoint**: US1 + US2 + US3 = MVP completo; quickstart §2–§4 pasan.
@@ -484,10 +485,9 @@ description: "Tareas para la base local, la sincronización y el inicio de sesi�
 ### Implementation for User Story 6
 
 - [ ] T082 [US6] In `SRC/session/sessionService.ts`, add the owner check to `signIn`. If `profile.id` differs from the stored profile's `id`, return `{ kind: 'ownerMismatch', pendingCount, confirm }` without saving anything; `confirm()` runs `wipeLocalData()` + `clearMirror()` and then saves. On success, clear `expired` and call `syncNow()`.
-- [ ] T083 [US6] In `SRC/sync/syncEngine.ts`, also skip the cycle when `sessionStore.expired`. In `SRC/sync/syncScheduler.ts`, subscribe to `sessionStore`: when `expired` goes from true to false, run immediately.
+- [ ] T083 [US6] In `SRC/sync/syncScheduler.ts` (the engine already skips while expired, T063), subscribe to `sessionStore`: when `expired` goes from true to false, run immediately.
 - [ ] T084 [US6] Create `SRC/app/(app)/reauth.tsx`, presented as a `modal` in `SRC/app/(app)/_layout.tsx`. It reuses the login form: extract the form from `SRC/app/(auth)/login.tsx` into `SRC/session/components/LoginForm.tsx` and use it in both screens. The email is prefilled from the profile. On `ownerMismatch`, show `confirm()` with "Vas a entrar con otra cuenta. Se borrarán los datos de este dispositivo ({n} cambios sin sincronizar se perderán)."; on success, `router.back()`.
 - [ ] T085 [US6] In `SRC/app/(app)/_layout.tsx`, add a non-blocking banner shown while `expired` (`GlassSurface` at the top, under the safe area) with "Tu sesión venció. Inicia sesión para sincronizar." and an "Iniciar sesión" action → `/reauth` (navigation rule N5).
-- [ ] T086 [US6] In `SRC/session/sessionService.ts`, when the app comes back online and `profile` is missing, fetch it again with `GET /users/me`.
 
 **Checkpoint**: quickstart §6 pasa; SC-008.
 
@@ -554,7 +554,7 @@ description: "Tareas para la base local, la sincronización y el inicio de sesi�
 - **Setup (Phase 1)** → **Foundational (Phase 2)**, which includes the T021 gate → user stories.
 - **US1 (P1)** and **US2 (P1)** depend only on Foundational and can proceed in parallel. They touch disjoint files, except `SRC/app/_layout.tsx` (T036, T050, T052) and `settings.tsx` (T037, T049): do those tasks sequentially.
 - **US3 (P1)** depends on US1 (session, `(app)` layout) and US2 (DB-backed mirror).
-- **US4**, **US5** and **US6** (P2) depend on US3. They are independent of each other except for shared files: `settings.tsx` (T075, T080) and `sessionService.ts` (T079, T082, T086).
+- **US4**, **US5** and **US6** (P2) depend on US3. They are independent of each other except for shared files: `settings.tsx` (T075, T080) and `sessionService.ts` (T079, T082).
 - **US7 (P3)** depends only on US1 (login screen, `apiClient`). It can be done any time after US1, even before US3.
 - **Polish** runs after the stories it documents or measures.
 

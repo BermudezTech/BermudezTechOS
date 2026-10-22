@@ -1,16 +1,16 @@
 <!--
 Sync Impact Report
-- Version change: (plantilla sin completar) → 1.0.0
-- Principios definidos (nuevos):
-  I. Offline-first
-  II. Sincronización incremental y determinista
-  III. Aislamiento multiusuario y seguridad
-  IV. Precisión monetaria y temporal
-  V. Modularidad y alcance controlado
-  VI. Experiencia multiplataforma liquid glass
-- Secciones añadidas: Restricciones técnicas e infraestructura; Flujo de trabajo y calidad; Governance
+- Version change: 1.0.0 → 1.1.0 (MINOR: se amplían de forma material las reglas de II y III)
+- Principios modificados:
+  II. Sincronización incremental y determinista — se permiten descargas completas puntuales por
+      tabla (reset del cursor) como mecanismo de recuperación.
+  III. Aislamiento multiusuario y seguridad — en web se admite `localStorage` para la sesión
+      persistente, con medidas obligatorias (sin scripts de terceros, CSP estricta).
+- Secciones añadidas: ninguna
 - Secciones eliminadas: ninguna
 - Plantillas: no modificadas (leen la constitución en tiempo de ejecución)
+- Specs afectadas: 006-client-sync-auth (Complexity Tracking del plan y research R5/R9 ya no son
+  desviaciones; revisar FR-028 y tareas de CSP)
 - TODOs diferidos: ninguno
 -->
 
@@ -37,7 +37,12 @@ debe ser instantáneo.
 - El cursor de PULL MUST ser una marca asignada por el servidor (`server_updated_at`), nunca el
   reloj del dispositivo, e incluye borrados lógicos.
 - `sync_metadata` guarda el último sync exitoso por tabla y MUST actualizarse solo tras completar
-  PUSH y PULL de esa tabla; solo el primer sync descarga todo.
+  PUSH y PULL de esa tabla.
+- Solo el primer sync descarga todo, salvo **descargas completas puntuales por tabla** como
+  recuperación: poner a NULL el cursor de esa tabla cuando el servidor descarta un cambio
+  (`DISCARDED`), cuando el usuario descarta su cambio local o cuando el servidor rechaza el cursor
+  (`INVALID_CURSOR`). Se usa el mismo endpoint de PULL, con las llamadas paginadas necesarias, y
+  afecta solo a la tabla implicada.
 - Toda operación de sync y de generación automática (p. ej. débitos de suscripciones) MUST ser
   idempotente; los registros que puedan generar cliente y servidor usan IDs deterministas (UUIDv5).
 
@@ -49,7 +54,12 @@ debe ser instantáneo.
   el usuario del JWT; nunca se confía en un `user_id` enviado por el cliente.
 - `user_id` existe solo en el servidor; la base local no lo almacena y se borra al cerrar sesión.
 - Autenticación con access token de corta duración + refresh token, guardados en almacenamiento
-  seguro del dispositivo (o su equivalente seguro en web).
+  seguro del dispositivo (`expo-secure-store` en Android).
+- En web se permite guardar la sesión en `localStorage` para que persista entre visitas. A cambio,
+  la app web MUST NOT cargar scripts de terceros y MUST servirse con una Content Security Policy
+  estricta (`script-src 'self' 'wasm-unsafe-eval'`, sin `unsafe-inline` ni `unsafe-eval` en producción;
+  `wasm-unsafe-eval` solo para el WASM de SQLite). Los tokens
+  MUST NOT ir a la base local ni a logs.
 - Secretos y claves de terceros (p. ej. modelos de IA) MUST vivir solo en el backend, en variables
   de entorno; `.env` fuera de git y `.env.example` versionado.
 
@@ -121,4 +131,4 @@ finanzas.
 - **Cumplimiento:** cada plan y cada revisión de código verifican los principios; toda desviación
   MUST justificarse por escrito en el plan (sección de complejidad).
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-17
+**Version**: 1.1.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-22

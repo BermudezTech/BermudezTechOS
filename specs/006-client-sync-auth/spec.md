@@ -50,6 +50,7 @@ Esta feature conecta las pantallas existentes con datos reales:
 - Crear, editar o eliminar categorías desde la app (la app recibe las del servidor).
 - Sincronización en segundo plano con la app cerrada y notificaciones push.
 - Bloqueo de la app con huella, rostro o PIN (feature posterior).
+- Débito automático de suscripciones (generar movimientos a partir de ellas): en esta feature las suscripciones solo se registran; el débito llegará en una spec posterior.
 - Módulos distintos de finanzas.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -197,7 +198,6 @@ Desde el inicio de sesión, el usuario pulsa "¿Olvidaste tu contraseña?", escr
 - **Registros que dependen de uno rechazado**: el servidor también los rechaza; la app los trata igual que al rechazado.
 - **Interrupción a mitad de bajada paginada**: el avance por tabla solo se guarda cuando la tabla se completa; al reintentar, se retoma de forma segura sin perder ni duplicar registros.
 - **Sincronizaciones solapadas**: si se dispara una sincronización mientras otra está en curso, no se ejecutan dos a la vez.
-- **Débitos automáticos de suscripciones**: la app sigue generándolos localmente con su identificador determinista; si otro dispositivo generó el mismo, se tratan como el mismo registro.
 - **Primer sync interrumpido**: el usuario ve sus datos parcialmente descargados y un indicador de que la descarga no terminó; el siguiente sync la completa.
 - **Monto recibido con formato inesperado** del servidor: el registro se ignora y se informa como error de sincronización; nunca se convierte con pérdida de precisión.
 - **Error del servidor o respuesta inválida**: el sync se marca como fallido, los pendientes siguen pendientes, y se reintenta en el próximo disparador; la interfaz nunca se bloquea.
@@ -219,7 +219,7 @@ Desde el inicio de sesión, el usuario pulsa "¿Olvidaste tu contraseña?", escr
 
 - **FR-003**: La app MUST guardar las ocho tablas de finanzas en una base local persistente en el dispositivo (Android y web), con la misma estructura lógica que `docs/db-finanzas.md`, sin el propietario (`user_id`).
 - **FR-004**: Cada registro sincronizable MUST tener ID generado en el cliente (UUID), fecha de creación, fecha de modificación, borrado lógico, la marca del servidor recibida en la última bajada (vacía si nunca se subió) y una marca de "pendiente de subir" (`is_dirty`).
-- **FR-005**: Toda creación, edición o borrado hecho por el usuario (o por generación automática local, como los débitos de suscripciones) MUST actualizar la fecha de modificación en UTC y marcar el registro como pendiente, en la misma operación que el cambio.
+- **FR-005**: Toda creación, edición o borrado hecho por el usuario MUST actualizar la fecha de modificación en UTC y marcar el registro como pendiente, en la misma operación que el cambio.
 - **FR-006**: Los borrados MUST ser lógicos; los registros borrados MUST NOT mostrarse en las pantallas ni contar en saldos o resúmenes.
 - **FR-007**: Los montos MUST almacenarse y operarse en la app con precisión decimal exacta (nunca punto flotante) y conservar exactamente el valor recibido del servidor y enviado a él.
 - **FR-008**: La interfaz MUST leer y escribir solo en la base local; ninguna pantalla MUST esperar a la red para mostrar o guardar datos. Las pantallas existentes MUST mantener su comportamiento y validaciones actuales.
@@ -249,7 +249,7 @@ Desde el inicio de sesión, el usuario pulsa "¿Olvidaste tu contraseña?", escr
 
 - **FR-026**: La app MUST ofrecer una pantalla de inicio de sesión con correo y contraseña, con validación de formato antes de enviar, indicador de carga y mensajes de error genéricos para credenciales inválidas, bloqueo temporal por intentos, falta de conexión y error del servidor.
 - **FR-027**: Tras iniciar sesión, la app MUST obtener y guardar el perfil del usuario (nombre y correo) y mostrarlo en Inicio y Ajustes en lugar del usuario ficticio, también sin conexión.
-- **FR-028**: Los tokens de acceso y de renovación MUST guardarse en el almacenamiento seguro del dispositivo (en web, el almacenamiento persistente del navegador para ese sitio, que sobrevive al cierre del navegador) y MUST NOT guardarse en la base local ni en registros de depuración. La web MUST mantener la sesión entre visitas igual que Android.
+- **FR-028**: Los tokens de acceso y de renovación MUST guardarse en el almacenamiento seguro del dispositivo (en web, el almacenamiento persistente del navegador para ese sitio, que sobrevive al cierre del navegador) y MUST NOT guardarse en la base local ni en registros de depuración. La web MUST mantener la sesión entre visitas igual que Android, usando `localStorage` con las medidas del principio III de la constitución (sin scripts de terceros y CSP estricta).
 - **FR-029**: Al abrir la app con una sesión guardada, la app MUST entrar directamente a las pantallas privadas sin requerir conexión.
 - **FR-030**: La app MUST renovar la sesión automáticamente cuando el acceso venza, rotando y guardando el nuevo token de renovación; las peticiones simultáneas MUST compartir una sola renovación.
 - **FR-031**: Si la renovación falla por sesión inválida o vencida, la app MUST conservar los datos locales, permitir seguir usándolos, mostrar un aviso no bloqueante para volver a iniciar sesión y pausar la sincronización hasta entonces.
@@ -289,7 +289,6 @@ Desde el inicio de sesión, el usuario pulsa "¿Olvidaste tu contraseña?", escr
 - **SC-008**: El usuario no tiene que volver a escribir su contraseña mientras use la app al menos una vez cada 7 días con conexión.
 - **SC-009**: Tras cerrar sesión, no queda ningún dato financiero ni credencial del usuario en el dispositivo.
 - **SC-010**: No queda ninguna referencia a datos de prueba ni al usuario ficticio en la app.
-- **SC-011**: Un usuario completa el inicio de sesión en menos de 30 segundos y la recuperación de contraseña (con el correo a mano) en menos de 3 minutos.
 
 ## Assumptions
 
