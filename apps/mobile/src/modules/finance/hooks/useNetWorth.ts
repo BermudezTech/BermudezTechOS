@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { isAssetValueExpired, netWorthEvolution, netWorthReport } from '../domain/netWorth';
 import { useActiveAccounts, useActiveAssets, useActiveCdts, useActiveTransactions, useToday } from './useFinanceData';
 
-export { createAsset, deleteAsset, updateAsset } from '../data/inMemory/assetsRepo';
+export { createAsset, deleteAsset, updateAsset } from '../data/local/assetsRepo';
 
 export function useNetWorth() {
   const accounts = useActiveAccounts();

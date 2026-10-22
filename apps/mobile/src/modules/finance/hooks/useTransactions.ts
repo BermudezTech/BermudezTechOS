@@ -5,7 +5,7 @@ import type { CategoryKind } from '../domain/types';
 import { filterTransactions, groupByLocalDay, periodTotal, recentTransactions } from '../domain/transactions';
 import { useActiveCategories, useActiveTransactions } from './useFinanceData';
 
-export { createTransaction, deleteTransaction, setTransactionCategory, updateTransaction } from '../data/inMemory/transactionsRepo';
+export { createTransaction, deleteTransaction, setTransactionCategory, updateTransaction } from '../data/local/transactionsRepo';
 
 export function useTransactions(filter: TransactionFilter) {
   const transactions = useActiveTransactions();

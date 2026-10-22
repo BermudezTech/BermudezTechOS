@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- las fábricas de jest.mock deben usar require */
 // Fija la zona horaria para que las pruebas de fechas sean deterministas.
 process.env.TZ = 'America/Bogota';
+// URL de la API para los módulos que la leen al importarse; las pruebas nunca llaman a la red real.
+process.env.EXPO_PUBLIC_API_URL = 'http://api.test/api/v1';
 
 jest.mock('expo-crypto', () => {
   let mockCounter = 0;

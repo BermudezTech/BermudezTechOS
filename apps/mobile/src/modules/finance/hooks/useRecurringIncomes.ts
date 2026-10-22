@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 
-import { useFinanceStore } from '../data/inMemory/store';
+import { useFinanceStore } from '../data/local/store';
 import { sortRecurringIncomes } from '../domain/recurringIncomes';
 import type { RecurringIncome } from '../domain/types';
 import { useActiveRecurringIncomes } from './useFinanceData';
@@ -10,7 +10,7 @@ export {
   deleteRecurringIncome,
   setRecurringIncomeStatus,
   updateRecurringIncome,
-} from '../data/inMemory/recurringIncomesRepo';
+} from '../data/local/recurringIncomesRepo';
 
 /** Plantillas no borradas: activas primero. */
 export function useRecurringIncomes() {

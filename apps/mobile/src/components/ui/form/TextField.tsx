@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Platform, TextInput, View, type TextInputProps } from 'react-native';
 
 import { useTheme } from '@/theme';
@@ -5,9 +6,9 @@ import { useTheme } from '@/theme';
 import { AppText } from '../AppText';
 import { useInputBoxStyle } from './FormField';
 
-type Props = Omit<TextInputProps, 'style'> & { hasError?: boolean; prefix?: string; large?: boolean };
+type Props = Omit<TextInputProps, 'style'> & { hasError?: boolean; prefix?: string; large?: boolean; right?: ReactNode };
 
-export function TextField({ hasError, prefix, large, ...rest }: Props) {
+export function TextField({ hasError, prefix, large, right, ...rest }: Props) {
   const theme = useTheme();
   const box = useInputBoxStyle(hasError);
   const typo = large ? theme.typography.amountLarge : theme.typography.body;
@@ -28,6 +29,7 @@ export function TextField({ hasError, prefix, large, ...rest }: Props) {
           Platform.OS === 'web' && ({ outlineStyle: 'none' } as object),
         ]}
       />
+      {right}
     </View>
   );
 }

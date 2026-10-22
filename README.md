@@ -63,24 +63,29 @@ Este repo usa [Spec Kit](https://github.com/github/spec-kit). Flujo de trabajo:
 
 ### App (`apps/mobile`)
 
-Requisitos: Node.js LTS (≥ 20) y npm. Para Android, un dispositivo con Expo Go/development build o un emulador.
+Requisitos: Node.js LTS (≥ 20) y npm. Para Android, un **development build** (la app usa módulos nativos: SQLite, almacenamiento seguro y red) o un emulador.
 
 ```bash
 cd apps/mobile
 npm install
-npx expo start        # "a" para Android, "w" para web
+cp .env.example .env   # EXPO_PUBLIC_API_URL: IP de tu PC en la LAN (Android) o http://localhost:8000/api/v1 (web)
+npx expo start         # "a" para Android, "w" para web
 ```
 
 | Comando | Qué hace |
 |---|---|
-| `npm test` | Pruebas unitarias (montos, fechas, dominio de finanzas, formulario de movimiento, contraste del tema) |
+| `npm test` | Pruebas unitarias (montos, dominio, base local, motor de sync, sesión y rutas) |
 | `npm run lint` | ESLint (config de Expo) |
 | `npm run typecheck` | TypeScript estricto (`tsc --noEmit`) |
 | `npm run format` | Formatea con Prettier |
+| `npm run build:dev:android` | Development build (perfil `development`, con `APP_VARIANT=development`) |
 
-> En esta fase la app usa **datos de prueba en memoria**: no hay base de datos, sincronización ni inicio de sesión. Los cambios se pierden al recargar; en **Ajustes → Datos de prueba** se pueden restablecer o vaciar para revisar los estados vacíos.
+- **Datos y sesión:** la app guarda todo en **Expo SQLite** en el dispositivo y lo sincroniza con la API (subir, luego bajar) al iniciar sesión, al abrirla, al recuperar la red, unos segundos después de cada cambio y cada 5 minutos en primer plano. Funciona sin conexión; el estado y los cambios pendientes se ven en **Ajustes → Sincronización**. Todas las pantallas exigen sesión; **al cerrar sesión se borran los datos del dispositivo**.
+- **Nuevo development build:** necesario tras esta versión, porque se añadieron módulos nativos (`expo-sqlite`, `expo-secure-store`, `expo-network`).
+- **HTTP en desarrollo (Android):** Android bloquea `http://` sin cifrar. El perfil `development` de EAS define `APP_VARIANT=development`, que lo permite solo en ese build. En producción usa siempre HTTPS.
+- **Web:** añade `http://localhost:8081` a `CORS_ORIGINS` en el `.env` de la API. Expo SQLite en web necesita las cabeceras `Cross-Origin-Embedder-Policy: credentialless` y `Cross-Origin-Opener-Policy: same-origin`: el servidor de desarrollo ya las envía (`metro.config.js`) y `app.config.ts` las declara para el hosting junto con una CSP estricta (sin scripts de terceros). Si publicas la web en otro servidor, configúralas allí. La app se abre en una sola pestaña a la vez.
 
-Escenarios de validación: [`specs/001-finance-ui-mockup/quickstart.md`](specs/001-finance-ui-mockup/quickstart.md).
+Escenarios de validación: [`specs/006-client-sync-auth/quickstart.md`](specs/006-client-sync-auth/quickstart.md) (y los de la interfaz en [`specs/001-finance-ui-mockup/quickstart.md`](specs/001-finance-ui-mockup/quickstart.md)).
 
 ### API (`apps/api`)
 

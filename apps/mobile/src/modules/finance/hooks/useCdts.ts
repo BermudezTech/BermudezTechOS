@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { cdtSummary, cdtValues, sortByMaturity } from '../domain/cdts';
 import { useActiveCdts, useActiveTransactions, useToday } from './useFinanceData';
 
-export { createCdt, updateCdt } from '../data/inMemory/cdtsRepo';
+export { createCdt, updateCdt } from '../data/local/cdtsRepo';
 
 export function useCdts() {
   const cdts = useActiveCdts();

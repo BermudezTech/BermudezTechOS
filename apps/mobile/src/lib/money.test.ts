@@ -3,6 +3,8 @@ import { Decimal } from 'decimal.js';
 import {
   abbreviateCop,
   add,
+  fromMoneyString,
+  toMoneyString,
   cents,
   formatCop,
   formatPercent,
@@ -99,5 +101,31 @@ describe('decimales', () => {
     expect(formatPercent(new Decimal('12.46'))).toBe('12,5 %');
     expect(formatPercent(new Decimal('10'))).toBe('10 %');
     expect(formatPercent(new Decimal('-3.25'))).toBe('\u22123,3 %');
+  });
+});
+
+describe('toMoneyString / fromMoneyString (API)', () => {
+  it('centavos → string con 2 decimales', () => {
+    expect(toMoneyString(cents(10))).toBe('0.10');
+    expect(toMoneyString(cents(123456))).toBe('1234.56');
+    expect(toMoneyString(cents(0))).toBe('0.00');
+    expect(toMoneyString(cents(99_999_999_999_999))).toBe('999999999999.99');
+  });
+
+  it('string → centavos sin pasar por punto flotante', () => {
+    expect(fromMoneyString('0.10')).toBe(10);
+    expect(fromMoneyString('0.2')).toBe(20);
+    expect(fromMoneyString('1234.5')).toBe(123450);
+    expect(fromMoneyString('7')).toBe(700);
+    expect(fromMoneyString('999999999999.99')).toBe(99_999_999_999_999);
+    expect(fromMoneyString('0.10') + fromMoneyString('0.20')).toBe(30);
+  });
+
+  it.each(['1.234', '-1.00', '1e3', '', 'abc', '1,50', ' 1.00', '1000000000000.00'])('rechaza %p', (value) => {
+    expect(() => fromMoneyString(value)).toThrow(RangeError);
+  });
+
+  it('no acepta negativos al convertir a string', () => {
+    expect(() => toMoneyString(cents(-1))).toThrow(RangeError);
   });
 });

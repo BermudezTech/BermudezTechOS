@@ -2,7 +2,7 @@
 import { localDateTimeToUtc, type IsoDate } from '@/lib/dates';
 import { cents } from '@/lib/money';
 
-import type { Account, Category, Cdt, ReimbursementGroup, Subscription, Transaction } from './types';
+import type { Account, Asset, Category, Cdt, RecurringIncome, ReimbursementGroup, Subscription, Transaction } from './types';
 
 const T0 = '2025-01-01T00:00:00.000Z';
 let counter = 0;
@@ -98,4 +98,25 @@ export function makeSubscription(over: Partial<Subscription> = {}): Subscription
 
 export function makeGroup(over: Partial<ReimbursementGroup> = {}): ReimbursementGroup {
   return { ...sync(over.id ?? nextId('grp')), name: 'Grupo', payer: null, kind: 'REIMBURSEMENT', status: 'OPEN', notes: null, ...over };
+}
+
+export function makeRecurringIncome(over: Partial<RecurringIncome> = {}): RecurringIncome {
+  return {
+    ...sync(over.id ?? nextId('ri')),
+    accountId: 'acc',
+    categoryId: null,
+    name: 'Salario',
+    icon: null,
+    expectedAmount: cents(500_000_000),
+    cycle: 'MONTHLY',
+    expectedDay: 30,
+    expectedMonth: null,
+    startDate: '2026-01-01',
+    status: 'ACTIVE',
+    ...over,
+  };
+}
+
+export function makeAsset(over: Partial<Asset> = {}): Asset {
+  return { ...sync(over.id ?? nextId('asset')), name: 'Carro', value: cents(5_000_000_000), validUntil: '2026-12-31', ...over };
 }

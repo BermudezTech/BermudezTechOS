@@ -100,6 +100,26 @@ export function parseAmount(input: string): ParseResult {
   return { ok: true, value: cents(value) };
 }
 
+const MONEY_STRING = /^(\d{1,12})(?:\.(\d{1,2}))?$/;
+
+/**
+ * Centavos → string decimal de la API (`"1234.56"`), por texto (research R15). Los montos que se
+ * sincronizan nunca son negativos.
+ */
+export function toMoneyString(value: Cents): string {
+  if (!Number.isSafeInteger(value) || value < 0 || value > MAX_CENTS) throw new RangeError(`Monto no sincronizable: ${value}`);
+  return `${Math.floor(value / 100)}.${String(value % 100).padStart(2, '0')}`;
+}
+
+/** String decimal de la API → centavos, sin `parseFloat` ni `Number()` sobre el decimal. */
+export function fromMoneyString(value: string): Cents {
+  const match = MONEY_STRING.exec(value);
+  if (!match) throw new RangeError(`Monto con formato inesperado: ${JSON.stringify(value)}`);
+  const integer = Number(match[1]);
+  const fraction = Number((match[2] ?? '').padEnd(2, '0'));
+  return cents(integer * 100 + fraction);
+}
+
 /** Representación editable (sin separador de miles), p. ej. 2500050 → "25000,50". */
 export function toInputString(value: Cents): string {
   const a = Math.abs(value);

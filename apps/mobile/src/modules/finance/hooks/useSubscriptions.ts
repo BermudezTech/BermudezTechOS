@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { monthlyEquivalent, subscriptionsWithNext } from '../domain/subscriptions';
 import { useActiveSubscriptions, useToday } from './useFinanceData';
 
-export { createSubscription, setSubscriptionStatus, updateSubscription } from '../data/inMemory/subscriptionsRepo';
+export { createSubscription, setSubscriptionStatus, updateSubscription } from '../data/local/subscriptionsRepo';
 
 export function useSubscriptions() {
   const subs = useActiveSubscriptions();

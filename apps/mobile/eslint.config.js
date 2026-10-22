@@ -17,7 +17,7 @@ module.exports = defineConfig([
         {
           patterns: [
             {
-              group: ['@/modules/finance/data/mock/*', '@/modules/finance/data/inMemory/*'],
+              group: ['@/modules/finance/data/local/*'],
               message: 'Las pantallas deben usar los hooks de @/modules/finance/hooks.',
             },
           ],

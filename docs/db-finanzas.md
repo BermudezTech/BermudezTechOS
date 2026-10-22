@@ -265,6 +265,21 @@ Plantillas de ingresos que se repiten (salario, arriendo recibido, honorarios). 
 | `pull_cursor` | TEXT | NULL | Cursor opaco que devolvió el servidor en el último PULL completo de la tabla; la app lo reenvía sin interpretarlo. NULL = nunca sincronizada (sync completo). |
 | `last_synced_at` | TEXT (TIMESTAMPTZ) | NULL | Hora local del último sync exitoso (solo informativo/UI). |
 
+**Columnas solo del cliente** (las ocho tablas de finanzas en SQLite, spec 006): además de las columnas de este documento (sin `user_id`), cada fila lleva `server_updated_at` (TEXT, NULL: marca del servidor recibida en el último PULL; NULL = nunca bajada) e `is_dirty` (INTEGER 0/1: cambio local pendiente de subir, con índice parcial `WHERE is_dirty = 1`). En SQLite los montos son `INTEGER` en centavos y las tasas `TEXT`; nunca `REAL`. Detalle: [`specs/006-client-sync-auth/data-model.md`](../specs/006-client-sync-auth/data-model.md).
+
+**`sync_rejections`** — *solo cliente*: el último rechazo del servidor (o del PULL, `LOCAL_PARSE_ERROR`) de cada registro, para mostrarlo en Ajustes.
+
+| Columna | Tipo | Restricciones | Descripción |
+|---|---|---|---|
+| `table_name` | TEXT | PK (con `record_id`) | Tabla del registro. |
+| `record_id` | TEXT | PK (con `table_name`) | |
+| `code` | TEXT | NOT NULL | `VALIDATION_ERROR`, `INVALID_REFERENCE`, `DEPENDENCY_REJECTED`, `INCOHERENT`, `DUPLICATE`, `ID_CONFLICT`, `CLOCK_AHEAD` o `LOCAL_PARSE_ERROR`. |
+| `message` | TEXT | NOT NULL | Motivo en español. |
+| `sent_updated_at` | TEXT | NULL | `updated_at` de la versión rechazada. |
+| `rejected_at` | TEXT | NOT NULL | UTC. |
+
+Se borra cuando el registro se sube con éxito, cuando un PULL trae una versión más nueva o cuando el usuario descarta su cambio.
+
 **Sincronización** (spec 004): un solo par de rutas para todas las tablas, `POST /api/v1/sync/push` y `POST /api/v1/sync/pull`. El PUSH aplica last-write-wins y responde un resultado por registro; el PULL entrega los cambios en orden de dependencias (categorías y cuentas antes que transacciones), paginado y con los borrados lógicos (`deleted_at`). Borrar es editar `deleted_at`: no hay ruta de eliminación. Contrato: [`specs/004-data-sync/contracts/http-api.md`](../specs/004-data-sync/contracts/http-api.md).
 
 **`users`** — *solo servidor* (autenticación JWT)

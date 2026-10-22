@@ -4,7 +4,7 @@ import { groupsSummary, withGroupBalance } from '../domain/reimbursements';
 import { sortByDateDesc } from '../domain/transactions';
 import { useActiveGroups, useActiveTransactions } from './useFinanceData';
 
-export { createReimbursementGroup, setReimbursementGroupStatus } from '../data/inMemory/reimbursementsRepo';
+export { createReimbursementGroup, setReimbursementGroupStatus } from '../data/local/reimbursementsRepo';
 
 export function useReimbursementGroups() {
   const groups = useActiveGroups();

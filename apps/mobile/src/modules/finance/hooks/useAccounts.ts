@@ -4,7 +4,7 @@ import { accountDetail, accountLabel, accountsSummary, availableTotal, withBalan
 import type { Account } from '../domain/types';
 import { useActiveAccounts, useActiveTransactions, useBalances } from './useFinanceData';
 
-export { archiveAccount, createAccount, deleteAccount, updateAccount } from '../data/inMemory/accountsRepo';
+export { archiveAccount, createAccount, deleteAccount, updateAccount } from '../data/local/accountsRepo';
 
 /** Cuentas principales con saldo (sin cajitas). */
 export function useAccounts({ includeArchived = false }: { includeArchived?: boolean } = {}) {

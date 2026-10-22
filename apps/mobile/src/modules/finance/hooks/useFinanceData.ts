@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 
 import { todayLocal } from '@/lib/dates';
 
-import { activeList, useFinanceStore } from '../data/inMemory/store';
+import { activeList, useFinanceStore } from '../data/local/store';
 import { balancesByAccount } from '../domain/balances';
 
 /** Listas activas (sin borrados) memoizadas por entidad. */
