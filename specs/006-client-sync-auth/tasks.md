@@ -285,6 +285,8 @@ description: "Tareas para la base local, la sincronización y el inicio de sesi�
   - `acquireTabLock(): Promise<boolean>` uses `navigator.locks.request('bermudeztech-db', { ifAvailable: true }, …)` and holds the lock with a never-resolving promise;
   - also call `navigator.storage?.persist?.()`.
 - [ ] T052 [US2] In `SRC/app/_layout.tsx`, call `acquireTabLock()` before opening the DB. If it returns `false`, render a `Screen` with the message "BermudezTechOS ya está abierto en otra pestaña." and a "Reintentar" `Button` that retries (navigation rule N7).
+
+  Likewise, if `restoreSession()` throws `StorageUnavailableError` (T027), render the same kind of `Screen` with "Este navegador no permite guardar datos (¿modo privado?). Abre la app en una ventana normal para usarla." and a "Reintentar" `Button` that re-runs the boot sequence (Edge case "Credenciales en web").
 - [ ] T053 [US2] Check empty states with an empty database (no categories until the first sync), and fix any crash or misleading UI:
   - Inicio, Finanzas › Cuentas, Movimientos, Gastos, Suscripciones, Ingresos recurrentes, Reembolsos, Inversiones and Patrimonio;
   - the transaction/subscription/recurring-income forms when the category list is empty: the category stays optional and no crash occurs.
@@ -480,11 +482,12 @@ description: "Tareas para la base local, la sincronización y el inicio de sesi�
   - `onRefreshRejected` sets `expired = true` and keeps the session, profile and DB;
   - `syncEngine.run()` while expired returns `skipped: expired` with no HTTP calls;
   - `signIn` while expired with the same profile `id` → clears `expired`, keeps the DB and triggers sync;
+  - `signIn` with no stored profile and a non-empty DB → returns `ownerMismatch` (owner unknown); with no stored profile and an empty DB → proceeds normally;
   - `signIn` with a different `id` → returns `ownerMismatch` with `pendingCount`, and changes nothing until `confirm()`, which wipes, saves the new session and profile, and clears `expired` (FR-032).
 
 ### Implementation for User Story 6
 
-- [ ] T082 [US6] In `SRC/session/sessionService.ts`, add the owner check to `signIn`. If `profile.id` differs from the stored profile's `id`, return `{ kind: 'ownerMismatch', pendingCount, confirm }` without saving anything; `confirm()` runs `wipeLocalData()` + `clearMirror()` and then saves. On success, clear `expired` and call `syncNow()`.
+- [ ] T082 [US6] In `SRC/session/sessionService.ts`, add the owner check to `signIn`. If `profile.id` differs from the stored profile's `id` — **or there is no stored profile but the local DB has at least one row in any of the 8 tables** (owner unknown, FR-032) — return `{ kind: 'ownerMismatch', pendingCount, confirm }` without saving anything; `confirm()` runs `wipeLocalData()` + `clearMirror()` and then saves. On success, clear `expired` and call `syncNow()`.
 - [ ] T083 [US6] In `SRC/sync/syncScheduler.ts` (the engine already skips while expired, T063), subscribe to `sessionStore`: when `expired` goes from true to false, run immediately.
 - [ ] T084 [US6] Create `SRC/app/(app)/reauth.tsx`, presented as a `modal` in `SRC/app/(app)/_layout.tsx`. It reuses the login form: extract the form from `SRC/app/(auth)/login.tsx` into `SRC/session/components/LoginForm.tsx` and use it in both screens. The email is prefilled from the profile. On `ownerMismatch`, show `confirm()` with "Vas a entrar con otra cuenta. Se borrarán los datos de este dispositivo ({n} cambios sin sincronizar se perderán)."; on success, `router.back()`.
 - [ ] T085 [US6] In `SRC/app/(app)/_layout.tsx`, add a non-blocking banner shown while `expired` (`GlassSurface` at the top, under the safe area) with "Tu sesión venció. Inicia sesión para sincronizar." and an "Iniciar sesión" action → `/reauth` (navigation rule N5).
