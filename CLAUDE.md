@@ -45,7 +45,7 @@ BermudezTechOS es una app **multiusuario** para gestionar finanzas, rutinas, cal
   - **API (JSON):** montos como **string** (`"1234.56"`) para no perder precisión.
   - **Cliente (SQLite/TS):** guardar como entero en centavos (`123456`) y formatear al mostrar, o usar una librería decimal (p. ej. `dinero.js`/`decimal.js`). Nunca operar montos con `number` directamente.
 - Guardar siempre la moneda junto al monto.
-- Fechas en UTC en almacenamiento; convertir a zona local solo para mostrar.
+- Fechas en UTC en almacenamiento; calcular y mostrar en `America/Bogota` (zona única del MVP, spec 007), nunca en la zona del dispositivo o del servidor.
 
 ### UI / diseño
 - Estética moderna **liquid glass**: superficies translúcidas con blur, colores vibrantes, bordes suaves, animaciones fluidas.

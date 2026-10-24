@@ -251,6 +251,7 @@ Como usuario, veo mis grupos de reembolso/adelanto abiertos con su saldo (me deb
 
 - **FR-034**: Los montos MUST mostrarse en formato colombiano (símbolo $, separador de miles "." y decimal ","), y los cálculos con montos MUST ser exactos (sin errores de redondeo).
 - **FR-035**: Las fechas MUST mostrarse en la zona horaria local del dispositivo y en español.
+  > Reemplazado por la spec 007 FR-027: las fechas se muestran en `America/Bogota`, no en la zona del dispositivo.
 - **FR-036**: La interfaz MUST seguir la estética *liquid glass* (superficies translúcidas, colores vibrantes, bordes suaves, transiciones fluidas) definida en un sistema de tema centralizado, con modo claro, oscuro y "según el sistema".
 - **FR-037**: Toda la interfaz MUST estar en español.
 - **FR-038**: Los elementos interactivos MUST tener área táctil mínima de 44×44 pt y etiquetas accesibles; el texto MUST mantener contraste legible sobre las superficies translúcidas en ambos temas.

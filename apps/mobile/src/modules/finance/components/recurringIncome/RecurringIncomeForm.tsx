@@ -14,7 +14,7 @@ import {
   TextField,
   type IconName,
 } from '@/components/ui';
-import { formatDateLocal, isoDate, todayLocal } from '@/lib/dates';
+import { formatDateLocal, isoDate, todayLocal, todayParts } from '@/lib/dates';
 import { toInputString } from '@/lib/money';
 import { useTheme } from '@/theme';
 
@@ -58,7 +58,7 @@ export function RecurringIncomeForm({ initial, onSubmit, submitLabel }: Props) {
       icon: initial?.icon ?? iconChoices[0]!,
       expectedAmount: initial ? toInputString(initial.expectedAmount) : '',
       cycle: initial?.cycle ?? 'MONTHLY',
-      expectedDay: String(initial?.expectedDay ?? new Date().getDate()),
+      expectedDay: String(initial?.expectedDay ?? todayParts().day),
       expectedMonth: initial?.expectedMonth ? String(initial.expectedMonth) : '',
       startDate: initial?.startDate ?? todayLocal(),
       accountId: initial?.accountId ?? accounts[0]?.account.id ?? null,

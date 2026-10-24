@@ -46,6 +46,7 @@ Módulo para configurar **gastos fijos recurrentes**.
 - Las suscripciones se **crean y editan desde el dispositivo**, también sin conexión.
 - Los débitos pueden generarse **en el dispositivo** (al abrir la app, para lo vencido sin conexión) **y en el servidor** (cron), de forma **atómica** e **idempotente**.
 - Para evitar duplicados entre ambos, el ID del débito es **determinista**: UUIDv5 de `(subscription_id, periodo)`. Si cliente y servidor generan el mismo cobro, al sincronizar es el mismo registro.
+- En el servidor, el servicio `billing` (spec 007) ejecuta el proceso cada día a las 00:05 de Bogotá. Cobra solo el **periodo actual**: lo que vence hoy o venció antes en el mismo periodo, y nunca lo anterior a la fecha de activación del servicio.
 
 ### 4.1 Ingresos recurrentes (spec 002)
 

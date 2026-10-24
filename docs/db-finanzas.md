@@ -194,6 +194,12 @@ El dinero de terceros **vive en tus cuentas normales**: no hay una cuenta aparte
 
 **Generación idempotente:** `transactions.id = uuid5(NAMESPACE, f"{subscription_id}:{period}")` + UNIQUE (`subscription_id`, `subscription_period`). Cliente y servidor pueden generar el mismo débito sin duplicarlo.
 
+- `NAMESPACE = 9d1e0cb1-0ae7-5d67-856e-c19860851ef1`, que es `uuid5(NAMESPACE_URL, "https://bermudeztech.os/subscription-debit")`. **No se cambia nunca**: hacerlo duplicaría cobros.
+- `subscription_id` va como UUID en minúsculas con guiones, y `period` como `YYYY-MM` (mensual) o `YYYY` (anual).
+- Vector de prueba: `7f1c2a9e-0000-4000-8000-000000000001:2026-10` → `e4bc34e4-a6ae-5090-9861-6968494a9467`.
+- `occurred_at` del débito es la fecha de cobro a las 00:00 `America/Bogota` (05:00Z).
+- En el servidor los genera el servicio `billing` (spec 007).
+
 ## 6. `cdts` — Inversiones CDT (§10)
 
 Cada CDT tiene además una fila en `accounts` (`type = INVESTMENT`) para que su capital entre en saldos y patrimonio con la misma lógica que las demás cuentas. Apertura = `TRANSFER` cuenta origen → cuenta del CDT.

@@ -14,7 +14,7 @@ import {
   TextField,
   type IconName,
 } from '@/components/ui';
-import { formatDateLocal, isoDate, todayLocal } from '@/lib/dates';
+import { formatDateLocal, isoDate, todayLocal, todayParts } from '@/lib/dates';
 import { toInputString } from '@/lib/money';
 import { useTheme } from '@/theme';
 
@@ -53,7 +53,7 @@ export function SubscriptionForm({ initial, onSubmit, submitLabel }: Props) {
       icon: initial?.icon ?? iconChoices[0]!,
       amount: initial ? toInputString(initial.amount) : '',
       billingCycle: initial?.billingCycle ?? 'MONTHLY',
-      billingDay: String(initial?.billingDay ?? new Date().getDate()),
+      billingDay: String(initial?.billingDay ?? todayParts().day),
       billingMonth: initial?.billingMonth ? String(initial.billingMonth) : '',
       startDate: initial?.startDate ?? todayLocal(),
       accountId: initial?.accountId ?? accounts[0]?.account.id ?? null,
