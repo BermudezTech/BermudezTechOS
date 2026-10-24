@@ -31,22 +31,34 @@ export function StatCard({ id, label, icon, iconColor, value, variant = 'default
   const visible = useAmountVisible(id);
   const toggle = useAmountVisibilityStore((s) => s.toggle);
   return (
-    <GlassCard onPress={() => router.push(href)} accessibilityLabel={`${label}, ver detalle`}>
+    <GlassCard>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing(3) }}>
-        <IconBadge name={icon} color={iconColor} />
-        <View style={{ flex: 1 }}>
-          <AppText variant="caption" tone="muted">
-            {label}
-          </AppText>
-          {visible ? (
-            <Amount value={value} variant={variant} size="large" />
-          ) : (
-            <AppText variant="amountLarge" accessibilityLabel={`${label} oculto`}>
-              {MASK}
+        <Pressable
+          onPress={() => router.push(href)}
+          accessibilityRole="button"
+          accessibilityLabel={`${label}, ver detalle`}
+          style={({ pressed }) => ({
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: theme.spacing(3),
+            opacity: pressed ? 0.85 : 1,
+          })}>
+          <IconBadge name={icon} color={iconColor} />
+          <View style={{ flex: 1 }}>
+            <AppText variant="caption" tone="muted">
+              {label}
             </AppText>
-          )}
-          {visible ? footer : null}
-        </View>
+            {visible ? (
+              <Amount value={value} variant={variant} size="large" />
+            ) : (
+              <AppText variant="amountLarge" accessibilityLabel={`${label} oculto`}>
+                {MASK}
+              </AppText>
+            )}
+            {visible ? footer : null}
+          </View>
+        </Pressable>
         <Pressable
           onPress={() => toggle(id)}
           accessibilityRole="button"
