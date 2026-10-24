@@ -110,6 +110,7 @@ docker compose up --build
 - **Recuperación de contraseña:** necesita `RESEND_API_KEY` y `MAIL_FROM` (remitente verificado en Resend). Sin ellas la API funciona, pero no envía correos.
 - **Servicio de cobros (`billing`):** contenedor aparte con la misma imagen. Al arrancar y luego cada día a las `BILLING_RUN_TIME` (00:05 por defecto) registra el egreso de las suscripciones activas que vencen en el periodo actual, nunca con fecha anterior a `BILLING_ACTIVATION_DATE`. Es idempotente: ejecutarlo de nuevo no duplica cobros. El resumen de cada ejecución queda en `docker compose logs billing`. Contrato: [`specs/007-subscription-debit-cron/contracts/billing-service.md`](specs/007-subscription-debit-cron/contracts/billing-service.md).
 - **Zona horaria:** todo el MVP (servicio, API y app) calcula y muestra fechas en `America/Bogota`, sin importar la zona del dispositivo o del servidor. Se almacena siempre en UTC.
+- **Versión web (`web`):** el compose también compila la web (`apps/mobile/Dockerfile.web`: `expo export` + nginx) y la sirve en `http://localhost:8080`. `EXPO_PUBLIC_API_URL` se fija al compilar y su origen va en la CSP; añade el origen de la web a `CORS_ORIGINS`. Las cabeceras COOP/COEP/CSP de nginx se generan desde `app.config.ts`, así que cualquier cambio se hace solo allí.
 - **Coolify:** despliega `docker-compose.yml` (sin puertos publicados; `docker-compose.override.yml` es solo local). Configura `FORWARDED_ALLOW_IPS` con la red del proxy para que el bloqueo de inicio de sesión vea la IP real del cliente.
 
 **Desarrollo** (en `apps/api`):

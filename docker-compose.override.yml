@@ -11,3 +11,7 @@ services:
       DOCS_ENABLED: "true"
     ports:
       - "8000:8000"
+
+  web:
+    ports:
+      - "${WEB_HOST_PORT:-8080}:8080"

@@ -1,4 +1,4 @@
-# API + PostgreSQL + servicio de cobros. Es el archivo que despliega Coolify (sin puertos publicados: lo enruta su proxy).
+# API + PostgreSQL + servicio de cobros + web. Es el archivo que despliega Coolify (sin puertos publicados: lo enruta su proxy).
 # En desarrollo, `docker compose up` añade docker-compose.override.yml (puertos y .env).
 services:
   db:
@@ -70,6 +70,24 @@ services:
       timeout: 10s
       retries: 3
       start_period: 120s
+
+  # Versión web de la app (export estático de Expo servido con nginx). La URL de la API se fija al
+  # compilar; su dominio debe estar en CORS_ORIGINS de la API.
+  web:
+    build:
+      context: ./apps/mobile
+      dockerfile: Dockerfile.web
+      args:
+        EXPO_PUBLIC_API_URL: ${EXPO_PUBLIC_API_URL:?EXPO_PUBLIC_API_URL es obligatoria}
+    restart: unless-stopped
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   pgdata:

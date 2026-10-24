@@ -1,0 +1,21 @@
+# --- Export estático de la web ---
+FROM node:24-bookworm-slim AS builder
+WORKDIR /app
+COPY package.json package-lock.json ./
+# Sin scripts de instalación: el export no los necesita y `better-sqlite3` (solo pruebas) compilaría
+# código nativo.
+RUN npm ci --no-audit --no-fund --ignore-scripts
+COPY . .
+# Se fija al compilar: va dentro del bundle y en el `connect-src` de la CSP (app.config.ts).
+ARG EXPO_PUBLIC_API_URL
+ENV EXPO_PUBLIC_API_URL=${EXPO_PUBLIC_API_URL} NODE_ENV=production
+RUN test -n "$EXPO_PUBLIC_API_URL" || (echo "EXPO_PUBLIC_API_URL es obligatoria" >&2 && exit 1)
+RUN npx expo export --platform web --output-dir dist \
+ && npx expo config --json --type public | node scripts/nginx-headers.mjs > headers.conf
+
+# --- Imagen final ---
+FROM nginxinc/nginx-unprivileged:1.29-alpine
+COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/headers.conf /etc/nginx/headers.conf
+COPY --from=builder /app/dist /usr/share/nginx/html
+EXPOSE 8080

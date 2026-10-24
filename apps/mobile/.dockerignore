@@ -1,0 +1,14 @@
+node_modules/
+.expo/
+dist/
+web-build/
+coverage/
+android/
+ios/
+.env
+.env.*
+!.env.example
+*.log
+.git/
+Dockerfile.web
+.dockerignore
