@@ -1,7 +1,7 @@
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { Pressable } from 'react-native';
 
-import { formatDateLocal, isoDate, parseIsoDate, type IsoDate } from '@/lib/dates';
+import { formatDateLocal, isoDate, parseIsoDate, todayParts, type IsoDate } from '@/lib/dates';
 import { useTheme } from '@/theme';
 
 import { AppText } from '../AppText';
@@ -16,9 +16,12 @@ export function DateInput({ value, onChange, hasError, accessibilityLabel }: Pro
   const box = useInputBoxStyle(hasError);
 
   const open = () => {
-    const current = value ? parseIsoDate(value) : null;
+    // Sin valor, abre en hoy de Bogotá (spec 007, FR-028).
+    const current = value ? parseIsoDate(value) : todayParts();
     DateTimePickerAndroid.open({
-      value: current ? new Date(current.year, current.month - 1, current.day) : new Date(),
+      // El selector trabaja en el calendario del dispositivo: la ida y vuelta por getFullYear/
+      // getMonth/getDate conserva el día elegido en cualquier zona.
+      value: new Date(current.year, current.month - 1, current.day),
       mode: 'date',
       onChange: (event, date) => {
         if (event.type === 'set' && date) {

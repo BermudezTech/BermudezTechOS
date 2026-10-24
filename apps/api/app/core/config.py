@@ -74,7 +74,7 @@ class Settings(BaseSettings):
         return self.resend_api_key is not None and bool(self.mail_from)
 
 
-def _describe(error: ValidationError) -> str:
+def describe_validation_error(error: ValidationError) -> str:
     parts: list[str] = []
     for item in error.errors():
         variable = ".".join(str(loc) for loc in item["loc"]).upper()
@@ -89,7 +89,7 @@ def load_settings() -> Settings:
     try:
         return Settings()
     except ValidationError as error:
-        raise ConfigError(_describe(error)) from None
+        raise ConfigError(describe_validation_error(error)) from None
 
 
 @lru_cache

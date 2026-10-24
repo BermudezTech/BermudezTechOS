@@ -11,16 +11,23 @@ export type Granularity = 'MONTH' | 'YEAR';
 /** `anchor` es cualquier día del periodo. */
 export type Period = { granularity: Granularity; anchor: IsoDate };
 
-export function deviceTimeZone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-}
+/**
+ * Zona única del MVP (spec 007, FR-023): todo se calcula y se muestra en hora de Bogotá, sin
+ * importar la zona del dispositivo o del navegador. Se guarda siempre en UTC.
+ */
+export const APP_TIME_ZONE = 'America/Bogota';
 
 export function nowUtc(): IsoDateTime {
   return new Date().toISOString();
 }
 
-export function todayLocal(zone = deviceTimeZone()): IsoDate {
+export function todayLocal(zone = APP_TIME_ZONE): IsoDate {
   return format(new Date(), 'yyyy-MM-dd', { in: tz(zone) });
+}
+
+/** Año, mes (1–12) y día de hoy en Bogotá. */
+export function todayParts(zone = APP_TIME_ZONE): { year: number; month: number; day: number } {
+  return parseIsoDate(todayLocal(zone));
 }
 
 export function parseIsoDate(date: IsoDate): { year: number; month: number; day: number } {
@@ -33,23 +40,23 @@ export function isoDate(year: number, month: number, day: number): IsoDate {
 }
 
 /** Instante UTC de una fecha y hora locales. */
-export function localDateTimeToUtc(date: IsoDate, hours = 12, minutes = 0, zone = deviceTimeZone()): IsoDateTime {
+export function localDateTimeToUtc(date: IsoDate, hours = 12, minutes = 0, zone = APP_TIME_ZONE): IsoDateTime {
   const { year, month, day } = parseIsoDate(date);
   return new Date(+new TZDate(year, month - 1, day, hours, minutes, zone)).toISOString();
 }
 
 /** Día local ("YYYY-MM-DD") de un instante UTC. */
-export function localDayKey(value: IsoDateTime, zone = deviceTimeZone()): IsoDate {
+export function localDayKey(value: IsoDateTime, zone = APP_TIME_ZONE): IsoDate {
   return format(new Date(value), 'yyyy-MM-dd', { in: tz(zone) });
 }
 
 /** Hora y minutos locales de un instante UTC. */
-export function localTimeParts(value: IsoDateTime, zone = deviceTimeZone()): { hours: number; minutes: number } {
+export function localTimeParts(value: IsoDateTime, zone = APP_TIME_ZONE): { hours: number; minutes: number } {
   const local = new TZDate(new Date(value), zone);
   return { hours: local.getHours(), minutes: local.getMinutes() };
 }
 
-export function formatDateLocal(value: IsoDateTime | IsoDate, pattern: string, zone = deviceTimeZone()): string {
+export function formatDateLocal(value: IsoDateTime | IsoDate, pattern: string, zone = APP_TIME_ZONE): string {
   const date = value.length === 10 ? new TZDate(...toParts(value), zone) : new Date(value);
   return format(date, pattern, { locale: es, in: tz(zone) });
 }
@@ -69,7 +76,7 @@ export function formatRelativeDay(day: IsoDate, today: IsoDate = todayLocal()): 
 }
 
 /** Rango [fromUtc, toUtc) del periodo en la zona local. */
-export function periodRangeUtc(period: Period, zone = deviceTimeZone()): { fromUtc: IsoDateTime; toUtc: IsoDateTime } {
+export function periodRangeUtc(period: Period, zone = APP_TIME_ZONE): { fromUtc: IsoDateTime; toUtc: IsoDateTime } {
   const anchor = new TZDate(...toParts(period.anchor), zone);
   const start = period.granularity === 'MONTH' ? startOfMonth(anchor) : startOfYear(anchor);
   const end = period.granularity === 'MONTH' ? addMonths(start, 1) : addYears(start, 1);

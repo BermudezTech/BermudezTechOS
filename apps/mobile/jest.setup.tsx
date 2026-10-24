@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- las fábricas de jest.mock deben usar require */
-// Fija la zona horaria para que las pruebas de fechas sean deterministas.
-process.env.TZ = 'America/Bogota';
+// Zona del runner: Bogotá salvo que se indique otra. `npm run test:tz` corre la suite en otras
+// zonas para comprobar que la app no depende de la del dispositivo (spec 007, FR-030).
+process.env.TZ = process.env.TZ || 'America/Bogota';
 // URL de la API para los módulos que la leen al importarse; las pruebas nunca llaman a la red real.
 process.env.EXPO_PUBLIC_API_URL = 'http://api.test/api/v1';
 

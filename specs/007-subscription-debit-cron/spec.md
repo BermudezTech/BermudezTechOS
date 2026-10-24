@@ -1,4 +1,4 @@
-# Feature Specification: Débito automático diario de suscripciones
+# Feature Specification: Débito automático diario de suscripciones y zona horaria única del MVP
 
 **Feature Branch**: `007-subscription-debit-cron`
 
@@ -8,6 +8,8 @@
 
 **Input**: User description: "Basado en la tabla de suscripciones @apps/api/app/db/models/subscriptions.py que se encuentra en la base de datos, crea un nuevo contenedor de docker y un microservicio encargado de cron job, lo que debe realizar es verificar todos los días si hay una suscripción que se debe cobrar hoy, y automáticamente registrar el egreso. El microservicio puede ser en python, y se podrá conectar directamente a la base de datos para no tener que hacer ninguna transaction adicional por API."
 
+**Ampliación (2026-10-24)**: "Dentro de ésta misma spec, asegurate que toda la MVP funciona con America/Bogota como TZ"
+
 **Documentos de referencia**: [`docs/modulo-finanzas.md`](../../docs/modulo-finanzas.md) (§4 Suscripciones) y [`docs/db-finanzas.md`](../../docs/db-finanzas.md) (§3 `transactions`, §5 `subscriptions`).
 
 ## Resumen
@@ -15,6 +17,8 @@
 Hoy las suscripciones solo se registran: nadie genera sus cobros (spec 004 y 006 lo dejaron fuera de alcance). Esta feature añade un **proceso programado en el servidor** que, una vez al día, revisa las suscripciones activas de todos los usuarios y, para cada una cuyo cobro cae hoy, **registra el egreso** en la cuenta asociada. El egreso llega a la app en el siguiente sync, como cualquier otro movimiento.
 
 El proceso corre como un **servicio independiente** de la API, desplegado junto a ella, que escribe directamente en la base de datos del servidor.
+
+Además, para que "hoy", "este mes" y la fecha de cada movimiento signifiquen lo mismo en el servidor y en todos los dispositivos, **todo el MVP usa una única zona horaria: `America/Bogota`** (UTC−5, sin horario de verano). Hasta ahora la app usaba la zona del dispositivo (spec 001, FR-035), así que un teléfono o navegador en otra zona podía agrupar movimientos en otro día o mes, o mostrar un día de cobro distinto al que usa el servicio. El almacenamiento sigue en UTC (constitución, Principio IV); lo que cambia es la zona en la que se calcula y se muestra.
 
 ### Alcance
 
@@ -26,13 +30,16 @@ El proceso corre como un **servicio independiente** de la API, desplegado junto 
 - Coordinación con la sincronización para que ningún débito generado se pierda en el PULL de la app.
 - Despliegue como servicio adicional en la misma composición que la API y la base de datos.
 - Registro (log) del resultado de cada ejecución.
+- Zona horaria única `America/Bogota` en todo el MVP: servicio de cobros, API y app (Android y web), para calcular "hoy", periodos (mes/año), agrupaciones por día, fechas por defecto de formularios, conversión de fechas elegidas a instantes UTC y presentación de fechas y horas.
+- Revisión de los cálculos y pantallas existentes de la app que hoy dependen de la zona del dispositivo, y pruebas automatizadas con el dispositivo en otra zona.
 
 **Fuera de alcance**
 
 - Generación de débitos en el dispositivo (al abrir la app sin conexión): llegará en otra spec, usando el mismo ID determinista.
 - Notificaciones al usuario (push o correo) sobre cobros realizados o próximos, y alertas al administrador cuando una ejecución falla.
 - Detectar que el usuario ya registró a mano el mismo cobro sin vincularlo a la suscripción.
-- Zona horaria por usuario.
+- Zona horaria por usuario o elegible en ajustes: el MVP usa solo `America/Bogota`.
+- Migrar o reescribir datos ya guardados: están en UTC y siguen siendo válidos; solo cambia cómo se interpretan al calcular y mostrar.
 - Periodicidades distintas de mensual y anual.
 
 ## Clarifications
@@ -44,6 +51,7 @@ El proceso corre como un **servicio independiente** de la API, desplegado junto 
 - Q: Si un cobro se registra tarde (p. ej. el del 15 se registra el 17), ¿qué fecha lleva el movimiento? → A: La fecha de cobro del periodo (el 15), no la del día en que se registró.
 - Q: Si la cuenta de una suscripción activa está archivada, ¿se registra su cobro? → A: Sí, normal; archivar solo oculta la cuenta. Para dejar de cobrar se pausa o cancela la suscripción.
 - Q: ¿Cómo se detecta que la ejecución diaria falló o no corrió? → A: Solo con el log del resumen de cada ejecución; el healthcheck indica únicamente que el proceso está vivo. Sin alertas ni notificaciones.
+- Q: ¿En qué zona horaria funciona el MVP? → A: En `America/Bogota` para todo (servicio de cobros, API y app en Android y web), sin importar la zona del dispositivo, del navegador o del servidor. Reemplaza FR-035 de la spec 001 ("zona horaria local del dispositivo").
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -117,6 +125,25 @@ Como administrador del despliegue, quiero que el servicio se despliegue junto a 
 
 ---
 
+### User Story 5 - Las fechas significan lo mismo en todas partes: `America/Bogota` (Priority: P1)
+
+Como usuario, quiero que "hoy", "este mes" y la fecha de cada movimiento sean los de Colombia, aunque mi teléfono o navegador esté en otra zona horaria (viaje, configuración errónea, servidor en UTC). Así el cobro que registra el servicio el día 15 aparece el 15 en la app, y los totales del mes no cambian según dónde abra la app.
+
+**Why this priority**: si la app y el servicio no usan la misma zona, un cobro puede aparecer el día o el mes equivocado y descuadrar los resúmenes mensuales. Es condición para que US1 sea correcta.
+
+**Independent Test**: con el dispositivo (o el navegador) en otra zona, p. ej. `Europe/Madrid` o `Asia/Tokyo`, registrar movimientos cerca de la medianoche de Bogotá y verificar que la app muestra los días, las agrupaciones, los totales del mes y las fechas por defecto igual que con el dispositivo en `America/Bogota`.
+
+**Acceptance Scenarios**:
+
+1. **Given** el dispositivo está en `Europe/Madrid` y en Bogotá son las 20:00 del 31 de octubre (ya es 1 de noviembre en Madrid), **When** el usuario abre un formulario de movimiento, **Then** la fecha propuesta es el 31 de octubre y el movimiento cuenta en el resumen de octubre.
+2. **Given** un movimiento registrado a las 23:30 hora de Bogotá, **When** se ve con el dispositivo en cualquier zona, **Then** aparece en ese día y esa hora (23:30), en el grupo de ese día y en el mes de ese día.
+3. **Given** el servicio registró un cobro con fecha de cobro el 15, **When** el usuario lo ve en la app, **Then** aparece el día 15 en cualquier zona del dispositivo.
+4. **Given** el usuario elige el 10 de marzo en un selector de fecha (Android o web), **When** guarda, **Then** el movimiento queda el 10 de marzo en Bogotá, no el 9 ni el 11.
+5. **Given** una suscripción o un ingreso recurrente, **When** la app calcula su próxima fecha de cobro o fecha esperada, **Then** usa el mismo "hoy" de Bogotá que el servicio de cobros.
+6. **Given** el usuario ve saldos y vencimientos (CDTs, patrimonio por mes, días restantes), **When** cambia la zona del dispositivo, **Then** los valores y las fechas no cambian.
+
+---
+
 ### Edge Cases
 
 - **Día 29, 30 o 31 en meses cortos**: se cobra el último día del mes (misma regla de `docs/db-finanzas.md`). Anual el 29 de febrero en año no bisiesto: se cobra el 28.
@@ -129,7 +156,12 @@ Como administrador del despliegue, quiero que el servicio se despliegue junto a 
 - **Cuenta archivada**: el cobro se registra igual; archivar solo oculta la cuenta en la app.
 - **Categoría eliminada**: el egreso se registra sin categoría (pendiente de clasificar) en lugar de fallar.
 - **Categoría que no es de gasto**: igual que la anterior, el egreso queda sin categoría; no se registra un egreso con categoría de ingreso.
-- **Cambio de día cerca de medianoche**: "hoy" se evalúa siempre en la zona horaria de referencia del servicio, no en UTC, para que un cobro del día 15 no se registre el 14 por la noche ni el 16.
+- **Cambio de día cerca de medianoche**: "hoy" se evalúa siempre en `America/Bogota`, no en UTC ni en la zona del contenedor, para que un cobro del día 15 no se registre el 14 por la noche ni el 16.
+- **Dispositivo o navegador en otra zona** (viaje, zona mal configurada): la app sigue calculando y mostrando en `America/Bogota`; la zona del dispositivo se ignora.
+- **Servidor o contenedores en UTC**: no afecta; ningún cálculo de negocio depende de la zona del sistema operativo.
+- **Entre las 19:00 y las 23:59 de Bogotá**: ya es el día siguiente en UTC; un movimiento de esa franja MUST quedar en el día de Bogotá, tanto al guardarlo como al agruparlo y al filtrarlo por mes.
+- **Movimientos ya guardados**: como están en UTC, al cambiar a `America/Bogota` solo cambia su presentación para quien tenía el dispositivo en otra zona; no se reescriben.
+- **Cambios futuros de la regla de Colombia** (p. ej. si adoptara horario de verano): se usa la base de datos de zonas horarias estándar, no un desfase fijo de −5 h, para que el cambio solo requiera actualizar esa base.
 - **Sincronización en curso**: si el usuario está sincronizando mientras se generan sus cobros, ninguno se pierde: o lo recibe en ese PULL o en el siguiente.
 - **Usuario eliminado durante la ejecución**: sus suscripciones dejan de procesarse; no es un error de la ejecución.
 - **Error en una suscripción** (datos inválidos, restricción violada): se registra, se omite esa suscripción y la ejecución continúa con las demás.
@@ -141,7 +173,7 @@ Como administrador del despliegue, quiero que el servicio se despliegue junto a 
 
 **Programación y ejecución**
 
-- **FR-001**: El sistema MUST ejecutar el proceso de cobros automáticamente una vez al día, a una hora configurable, evaluando "hoy" en una zona horaria de referencia configurable.
+- **FR-001**: El sistema MUST ejecutar el proceso de cobros automáticamente una vez al día, a una hora configurable expresada en hora de Bogotá, evaluando "hoy" en la zona del MVP (`America/Bogota`, FR-023).
 - **FR-002**: El sistema MUST permitir ejecutar el proceso a mano, opcionalmente para una fecha concreta, con el mismo resultado que la ejecución programada para esa fecha.
 - **FR-003**: El proceso MUST revisar las suscripciones de **todos** los usuarios en cada ejecución.
 
@@ -155,7 +187,7 @@ Como administrador del despliegue, quiero que el servicio se despliegue junto a 
 
 **Registro del egreso**
 
-- **FR-008**: Cada cobro MUST registrarse como un movimiento de tipo egreso con: el monto de la suscripción (decimal exacto, nunca punto flotante), la cuenta de la suscripción, su categoría si existe y es de gasto, descripción igual al nombre de la suscripción, origen de categoría manual, fecha del movimiento igual a la fecha de cobro del periodo (también cuando se registra en un día posterior; nunca la fecha de ejecución), vínculo a la suscripción y su periodo.
+- **FR-008**: Cada cobro MUST registrarse como un movimiento de tipo egreso con: el monto de la suscripción (decimal exacto, nunca punto flotante), la cuenta de la suscripción, su categoría si existe y es de gasto, descripción igual al nombre de la suscripción, origen de categoría manual, fecha del movimiento igual a la fecha de cobro del periodo en `America/Bogota` (también cuando se registra en un día posterior; nunca la fecha de ejecución), guardada como un instante UTC que cae en ese día de Bogotá, vínculo a la suscripción y su periodo.
 - **FR-009**: El movimiento MUST pertenecer al mismo usuario que la suscripción y MUST referenciar solo cuenta y categoría de ese usuario.
 - **FR-010**: El ID del movimiento MUST ser determinista a partir de (suscripción, periodo), con el esquema documentado en `docs/db-finanzas.md` §5, y el espacio de nombres usado MUST quedar fijado y documentado para que la app genere exactamente el mismo ID en el futuro.
 - **FR-011**: Si la cuenta de la suscripción no existe o está borrada, MUST NOT registrarse el cobro; se registra en el log como omitido con motivo. Una cuenta **archivada** no impide el cobro: se registra normalmente.
@@ -180,6 +212,17 @@ Como administrador del despliegue, quiero que el servicio se despliegue junto a 
 - **FR-021**: Si la base de datos no está disponible, el servicio MUST reintentar con espera creciente dentro de una ventana limitada y registrar el fallo si no lo consigue.
 - **FR-022**: La lógica de cálculo de periodos, fechas de cobro e idempotencia MUST tener pruebas automatizadas (constitución, Flujo de trabajo y calidad).
 
+**Zona horaria única del MVP**
+
+- **FR-023**: Todo el MVP (servicio de cobros, API y app en Android y web) MUST usar `America/Bogota` como única zona horaria para cualquier cálculo o presentación que dependa del día, mes, año u hora local. La zona MUST definirse en un único lugar por componente (una constante compartida), no repetirse en cada cálculo.
+- **FR-024**: Ningún cálculo de negocio MUST depender de la zona del dispositivo, del navegador, del sistema operativo del servidor o del contenedor; con cualquiera de ellas en otra zona, los resultados MUST ser idénticos.
+- **FR-025**: El almacenamiento y el intercambio MUST seguir en UTC (constitución, Principio IV): fechas y horas como instantes UTC y fechas puras como `YYYY-MM-DD` interpretadas en Bogotá. No se reescriben datos existentes.
+- **FR-026**: En la app, MUST calcularse en `America/Bogota`: el día de hoy, las fechas por defecto de los formularios (incluido el día de cobro o esperado propuesto), la conversión de una fecha elegida a instante UTC, la agrupación de movimientos por día, los rangos de mes y año de resúmenes, gastos por categoría y patrimonio, y los días restantes o próximas fechas de suscripciones, ingresos recurrentes y CDTs.
+- **FR-027**: En la app, toda fecha y hora mostrada (listas, detalle, "Hoy"/"Ayer", estado de sincronización, saludo según la hora) MUST mostrarse en hora de Bogotá, en español. Esto reemplaza FR-035 de la spec 001.
+- **FR-028**: Los selectores de fecha (Android y web) MUST devolver el día de calendario elegido por el usuario sin desplazarlo por la zona del dispositivo, y MUST abrir por defecto en el día de hoy en Bogotá.
+- **FR-029**: La conversión entre UTC y Bogotá MUST usar la base de datos de zonas horarias estándar (identificador `America/Bogota`), no un desfase fijo.
+- **FR-030**: MUST existir pruebas automatizadas que ejecuten los cálculos de fechas de la app y del servicio con el entorno en al menos dos zonas distintas de Bogotá (una por delante y una por detrás de UTC) y verifiquen los mismos resultados, incluidos casos entre las 19:00 y las 23:59 de Bogotá y el cambio de mes y de año.
+
 ### Key Entities
 
 - **Suscripción** (existente, `subscriptions`): gasto fijo recurrente con cuenta, categoría opcional, monto, periodicidad (mensual/anual), día y mes de cobro, fecha de inicio y estado. Es la fuente del cobro; esta feature solo la lee.
@@ -196,12 +239,16 @@ Como administrador del despliegue, quiero que el servicio se despliegue junto a 
 - **SC-004**: El usuario ve el egreso en la app en su siguiente sincronización tras la ejecución, sin pasos adicionales.
 - **SC-005**: La ejecución diaria termina en menos de 1 minuto con 10.000 suscripciones activas.
 - **SC-006**: Tras un despliegue nuevo, el servicio queda programado y sano sin intervención manual, y el resumen de cada ejecución es consultable en los logs del despliegue.
+- **SC-007**: Con el dispositivo o el navegador en cualquier zona horaria, el 100 % de los días, agrupaciones, totales por mes y año y fechas por defecto que muestra la app coinciden con los obtenidos en `America/Bogota`.
+- **SC-008**: El 100 % de los cobros generados por el servicio aparecen en la app en su fecha de cobro, sin desfase de un día, en cualquier zona del dispositivo.
 
 ## Assumptions
 
-- **Zona horaria de referencia**: el MVP opera en Colombia (COP), así que "hoy" se evalúa por defecto en `America/Bogota`, configurable para todo el servicio. La zona por usuario queda fuera de alcance.
+- **Zona horaria del MVP**: el MVP opera en Colombia (COP) y sus usuarios viven allí, así que se fija `America/Bogota` para todo el sistema (FR-023), sin configuración. La zona por usuario queda fuera de alcance; el diseño (una constante por componente) permite añadirla después sin reescribir los cálculos.
+- **Coherencia con documentos previos**: FR-027 reemplaza FR-035 de la spec 001 ("zona horaria local del dispositivo"). La constitución (Principio IV) y `CLAUDE.md` dicen "convertir a zona local solo al mostrar"; en el MVP, "zona local" pasa a significar `America/Bogota`. El plan MUST verificarlo en su Constitution Check y proponer, si hace falta, ajustar la redacción de esos documentos. La migración de la spec 005 ya usa `-05:00`, así que sus datos son coherentes.
 - **Fecha de activación**: se fija al desplegar el servicio por primera vez (normalmente, el día del despliegue) y no se cambia después, salvo para una recuperación deliberada.
-- **Hora de ejecución**: por defecto a primera hora del día en la zona de referencia (p. ej. 00:05), configurable.
+- **Hora de ejecución**: por defecto a primera hora del día en Bogotá (p. ej. 00:05), configurable.
+- **API**: hoy no hace cálculos que dependan del día local (solo compara instantes UTC). Si alguno aparece, aplica FR-023.
 - **Moneda**: la del MVP (COP); el egreso hereda la moneda de la cuenta como cualquier otro movimiento.
 - **Escritura directa**: el servicio se conecta directamente a la base de datos del servidor, como pidió el usuario, en lugar de usar la API. A cambio, MUST respetar las mismas reglas que la API: aislamiento por usuario, marca de servidor para el cursor y lock de sincronización por usuario (ver `apps/api/app/modules/sync/core/lock.py`).
 - **Tecnología**: servicio en Python, en su propio contenedor, con la misma base de datos PostgreSQL. Si comparte código con `apps/api` (modelos, cálculo de periodos) o se ubica en `apps/` como servicio propio, se decide en el plan.

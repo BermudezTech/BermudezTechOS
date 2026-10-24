@@ -101,12 +101,15 @@ cp apps/api/.env.example .env      # en la raíz del repo (lo lee docker compose
 #   POSTGRES_PASSWORD y la misma clave en DATABASE_URL
 #   JWT_SECRET y PASSWORD_RESET_PEPPER  → openssl rand -base64 48
 #   INITIAL_USER_EMAIL / INITIAL_USER_PASSWORD / INITIAL_USER_DISPLAY_NAME
+#   BILLING_ACTIVATION_DATE              → día del primer despliegue (YYYY-MM-DD)
 docker compose up --build
 ```
 
 - La API queda en `http://localhost:8000`, con la documentación interactiva en `/docs` (solo en desarrollo) y el estado en `/health`.
 - Al arrancar se aplican las migraciones (Alembic) y luego la **seed**: si la base no tiene usuarios, crea el usuario de `INITIAL_USER_*` con su set inicial de categorías. Si ya existe un usuario, no hace nada. Si faltan esas variables con la base vacía, el contenedor no arranca e indica qué variable falta. No hay registro desde la app; se recomienda borrar `INITIAL_USER_PASSWORD` tras el primer despliegue.
 - **Recuperación de contraseña:** necesita `RESEND_API_KEY` y `MAIL_FROM` (remitente verificado en Resend). Sin ellas la API funciona, pero no envía correos.
+- **Servicio de cobros (`billing`):** contenedor aparte con la misma imagen. Al arrancar y luego cada día a las `BILLING_RUN_TIME` (00:05 por defecto) registra el egreso de las suscripciones activas que vencen en el periodo actual, nunca con fecha anterior a `BILLING_ACTIVATION_DATE`. Es idempotente: ejecutarlo de nuevo no duplica cobros. El resumen de cada ejecución queda en `docker compose logs billing`. Contrato: [`specs/007-subscription-debit-cron/contracts/billing-service.md`](specs/007-subscription-debit-cron/contracts/billing-service.md).
+- **Zona horaria:** todo el MVP (servicio, API y app) calcula y muestra fechas en `America/Bogota`, sin importar la zona del dispositivo o del servidor. Se almacena siempre en UTC.
 - **Coolify:** despliega `docker-compose.yml` (sin puertos publicados; `docker-compose.override.yml` es solo local). Configura `FORWARDED_ALLOW_IPS` con la red del proxy para que el bloqueo de inicio de sesión vea la IP real del cliente.
 
 **Desarrollo** (en `apps/api`):
@@ -120,6 +123,8 @@ docker compose up --build
 | `uv run pytest` | Pruebas contra PostgreSQL real (testcontainers, o `TEST_DATABASE_URL`) |
 | `uv run ruff check . && uv run ruff format --check .` | Lint y formato |
 | `uv run mypy app` | Tipos (modo estricto) |
+| `uv run python -m app.modules.subscription_debits run [--date YYYY-MM-DD]` | Una ejecución de cobros (en Docker: `docker compose exec billing python -m app.modules.subscription_debits run`) |
+| `uv run python -m app.modules.subscription_debits health` | Estado del servicio de cobros (0 si el latido es reciente) |
 
 **Sincronización:** los datos de finanzas no tienen rutas por entidad. La app (offline-first) envía sus cambios con `POST /api/v1/sync/push` y recibe los del servidor con `POST /api/v1/sync/pull`, ambos para todas las tablas. Contrato y escenarios: [`specs/004-data-sync/`](specs/004-data-sync/) ([contrato](specs/004-data-sync/contracts/http-api.md), [quickstart](specs/004-data-sync/quickstart.md)).
 
