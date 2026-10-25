@@ -38,6 +38,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: './assets/images/icon.png',
   scheme: 'bermudeztechos',
   userInterfaceStyle: 'automatic',
+  // Hash de todo lo nativo (dependencias, plugins, esta config): una actualización OTA solo llega a
+  // los builds con el mismo hash. Si cambia, hace falta un EAS Build nuevo.
+  runtimeVersion: { policy: 'fingerprint' },
+  updates: {
+    url: 'https://u.expo.dev/a7794bd2-327f-48d8-8443-7587dbb33456',
+  },
   ios: {
     bundleIdentifier: 'com.bermudeztech.os',
   },
