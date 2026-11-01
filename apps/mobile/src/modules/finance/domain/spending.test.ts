@@ -1,6 +1,14 @@
 import { cents } from '@/lib/money';
 
-import { categoryTransactions, spendingEvolution, spendingReport } from './spending';
+import { monthSummary } from './monthSummary';
+import {
+  categoryFlowEvolution,
+  categoryFlowReport,
+  categoryFlowTransactions,
+  categoryTransactions,
+  spendingEvolution,
+  spendingReport,
+} from './spending';
 import { makeCategory, makeTx } from './testUtils';
 
 const food = makeCategory({ id: 'food', name: 'Alimentación' });
@@ -60,5 +68,57 @@ describe('spendingEvolution y categoryTransactions', () => {
   it('lista movimientos de una categoría (o sin categoría)', () => {
     expect(categoryTransactions(txs, 'food', october).map((t) => t.amount)).toEqual([10_000, 30_000]);
     expect(categoryTransactions(txs, null, october)).toHaveLength(1);
+  });
+});
+
+describe('categoryFlowReport (ingresos)', () => {
+  const salary = makeCategory({ id: 'salary', name: 'Salario', kind: 'INCOME' });
+  const extra = makeCategory({ id: 'extra', name: 'Extras', kind: 'INCOME' });
+  const incomeCategories = new Map([salary, extra].map((c) => [c.id, c]));
+  const incomes = [
+    makeTx({ type: 'INCOME', categoryId: 'salary', amount: cents(500_000), on: '2026-10-01' }),
+    makeTx({ type: 'INCOME', categoryId: 'extra', amount: cents(100_000), on: '2026-10-15' }),
+    makeTx({ type: 'INCOME', categoryId: null, amount: cents(50_000), on: '2026-10-20' }),
+    makeTx({ type: 'INCOME', categoryId: 'salary', amount: cents(400_000), on: '2026-09-01' }),
+    // Excluidos: transferencia, ingreso de grupo de reembolso y un egreso.
+    makeTx({ type: 'TRANSFER', counterAccountId: 'card', amount: cents(999_000), on: '2026-10-10' }),
+    makeTx({ type: 'INCOME', categoryId: 'extra', amount: cents(888_000), reimbursementGroupId: 'g1', on: '2026-10-11' }),
+    makeTx({ categoryId: 'food', amount: cents(30_000), on: '2026-10-05' }),
+  ];
+  const report = categoryFlowReport(incomes, incomeCategories, october, 'INCOME');
+
+  it('agrupa ingresos personales por categoría, con "Sin categoría"', () => {
+    expect(report.kind).toBe('INCOME');
+    expect(report.total).toBe(650_000);
+    expect(report.previousTotal).toBe(400_000);
+    expect(report.items.map((i) => [i.name, i.amount])).toEqual([
+      ['Salario', 500_000],
+      ['Extras', 100_000],
+      ['Sin categoría', 50_000],
+    ]);
+    expect(report.items.reduce((acc, i) => acc + i.pct.toNumber(), 0)).toBeCloseTo(100, 6);
+  });
+
+  it('calcula la variación por categoría', () => {
+    expect((report.items[0]?.delta as { toNumber(): number }).toNumber()).toBe(25);
+    expect(report.items[1]?.delta).toBe('new');
+  });
+
+  it('evolución de 6 periodos y movimientos de una categoría', () => {
+    expect(categoryFlowEvolution(incomes, october, 'INCOME', 6).map((p) => p.total)).toEqual([0, 0, 0, 0, 400_000, 650_000]);
+    expect(categoryFlowTransactions(incomes, 'salary', october, 'INCOME').map((t) => t.amount)).toEqual([500_000]);
+    expect(categoryFlowTransactions(incomes, null, october, 'INCOME').map((t) => t.amount)).toEqual([50_000]);
+  });
+
+  it.each([
+    { granularity: 'MONTH' as const, anchor: '2026-10-01' },
+    { granularity: 'MONTH' as const, anchor: '2026-09-01' },
+    { granularity: 'YEAR' as const, anchor: '2026-01-01' },
+  ])('coincide con el resumen del periodo (SC-002) — %o', (period) => {
+    const all = [...txs, ...incomes];
+    const summary = monthSummary(all, period);
+    const allCategories = new Map([...categories, ...incomeCategories]);
+    expect(categoryFlowReport(all, allCategories, period, 'INCOME').total).toBe(summary.income);
+    expect(categoryFlowReport(all, allCategories, period, 'EXPENSE').total).toBe(summary.expense);
   });
 });

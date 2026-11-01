@@ -8,9 +8,18 @@ import { useTheme } from '@/theme';
 import type { EvolutionPoint } from '../../domain/spending';
 import { useWidth } from './useWidth';
 
-/** Barras con el gasto de los últimos periodos; el actual resaltado. */
-export function EvolutionChart({ points }: { points: EvolutionPoint[] }) {
+type Props = {
+  points: EvolutionPoint[];
+  /** Inicio de la descripción accesible, p. ej. "Evolución del gasto". */
+  accessibilityPrefix: string;
+  /** Hexadecimal (#RRGGBB); por defecto el acento. */
+  color?: string;
+};
+
+/** Barras con el total de los últimos periodos; el actual resaltado. */
+export function EvolutionChart({ points, accessibilityPrefix, color }: Props) {
   const theme = useTheme();
+  const tint = color ?? theme.colors.accent;
   const { width, onLayout } = useWidth();
   const yAxisWidth = 56;
   // gifted-charts añade márgenes internos al ancho indicado.
@@ -23,12 +32,12 @@ export function EvolutionChart({ points }: { points: EvolutionPoint[] }) {
       onLayout={onLayout}
       style={{ overflow: 'hidden' }}
       accessible
-      accessibilityLabel={`Evolución del gasto: ${points.map((p) => `${periodShortLabel(p.period)} ${abbreviateCop(p.total)}`).join(', ')}`}>
+      accessibilityLabel={`${accessibilityPrefix}: ${points.map((p) => `${periodShortLabel(p.period)} ${abbreviateCop(p.total)}`).join(', ')}`}>
       <BarChart
         data={points.map((p, i) => ({
           value: p.total / 100,
           label: periodShortLabel(p.period),
-          frontColor: i === points.length - 1 ? theme.colors.accent : `${theme.colors.accent}66`,
+          frontColor: i === points.length - 1 ? tint : `${tint}66`,
         }))}
         width={usable}
         height={170}

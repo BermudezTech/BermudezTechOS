@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { EmptyState, GlassCard, IconButton, ListItem, Screen, SectionHeader, useIsWide } from '@/components/ui';
+import { MonthSelector } from '@/modules/finance/components/summary/MonthSelector';
 import { useAmountVisibilityStore } from '@/modules/finance/hooks/useAmountVisibility';
 import { financeSections } from '@/modules/finance/sections';
 import { useTheme } from '@/theme';
@@ -28,6 +29,8 @@ export default function FinanceHomeScreen() {
       {financeSections.length === 0 ? (
         <EmptyState icon="wallet-outline" title="Aún no hay secciones" message="Las secciones de finanzas aparecerán aquí." />
       ) : null}
+
+      {cards.some((c) => c.order < 10) ? <MonthSelector /> : null}
 
       {cards.length > 0 ? (
         <View style={[styles.grid, { gap: theme.spacing(3) }]}>

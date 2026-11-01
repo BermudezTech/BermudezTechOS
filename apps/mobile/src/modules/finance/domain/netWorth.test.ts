@@ -1,7 +1,7 @@
 import { cents } from '@/lib/money';
 
 import { currentValue } from './cdtValuation';
-import { isAssetValueExpired, netWorthEvolution, netWorthReport } from './netWorth';
+import { firstNetWorthMonth, isAssetValueExpired, netWorthEvolution, netWorthMonthsFor, netWorthReport } from './netWorth';
 import { makeAccount, makeCdt, makeTx } from './testUtils';
 import type { Asset } from './types';
 
@@ -67,5 +67,49 @@ describe('netWorthEvolution', () => {
     expect(points[10]?.date).toBe('2026-09-30');
     // En julio aún no existía la deuda ni el CDT: 1.000.000 (ahorros) + bien.
     expect(points[8]).toEqual({ date: '2026-07-31', netWorth: 1_000_000 + 5_000_000 });
+  });
+});
+
+describe('firstNetWorthMonth', () => {
+  const at = (iso: string) => ({ createdAt: iso });
+
+  it('toma el dato más antiguo entre movimientos, CDTs, cuentas y bienes', () => {
+    const acc = makeAccount({ ...at('2026-05-03T15:00:00.000Z') });
+    expect(firstNetWorthMonth([acc], txs, [cdt], [{ ...car, createdAt: '2026-06-01T15:00:00.000Z' }])).toBe('2026-05-01');
+    expect(firstNetWorthMonth([], txs, [cdt], [])).toBe('2026-08-01');
+    expect(firstNetWorthMonth([], [], [makeCdt({ openedOn: '2025-12-20' })], [])).toBe('2025-12-01');
+  });
+
+  it('usa el mes de Bogotá e ignora borrados', () => {
+    // 1 de marzo 02:00 UTC = 28 de febrero en Bogotá.
+    expect(firstNetWorthMonth([makeAccount(at('2026-03-01T02:00:00.000Z'))], [], [], [])).toBe('2026-02-01');
+    expect(
+      firstNetWorthMonth([makeAccount({ ...at('2020-01-01T15:00:00.000Z'), deletedAt: '2021-01-01T00:00:00.000Z' })], [], [], []),
+    ).toBeNull();
+  });
+});
+
+describe('netWorthMonthsFor', () => {
+  it('recorta el rango al historial disponible', () => {
+    // De marzo a octubre: 8 meses de historial.
+    expect(netWorthMonthsFor('6M', '2026-03-01', TODAY)).toBe(6);
+    expect(netWorthMonthsFor('12M', '2026-03-01', TODAY)).toBe(8);
+    expect(netWorthMonthsFor('24M', '2026-03-01', TODAY)).toBe(8);
+    expect(netWorthMonthsFor('ALL', '2026-03-01', TODAY)).toBe(8);
+  });
+
+  it('con historial largo "Todo" abarca todos los meses', () => {
+    expect(netWorthMonthsFor('24M', '2023-01-01', TODAY)).toBe(24);
+    expect(netWorthMonthsFor('ALL', '2023-01-01', TODAY)).toBe(46);
+  });
+
+  it('sin datos dibuja solo el mes en curso', () => {
+    for (const range of ['6M', '12M', '24M', 'ALL'] as const) expect(netWorthMonthsFor(range, null, TODAY)).toBe(1);
+  });
+
+  it('netWorthEvolution acepta rangos largos', () => {
+    const points = netWorthEvolution(accounts, txs, [cdt], [car], TODAY, 30);
+    expect(points).toHaveLength(30);
+    expect(points[29]?.date).toBe(TODAY);
   });
 });

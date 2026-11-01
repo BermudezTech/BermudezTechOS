@@ -26,6 +26,7 @@ export default function NewTransactionScreen() {
         />
       ) : (
         <TransactionForm
+          allowCreateCategory
           accounts={accounts}
           categories={categories}
           recurringIncomes={recurringIncomes}

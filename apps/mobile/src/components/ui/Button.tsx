@@ -51,15 +51,28 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled, co
 }
 
 /** Botón redondo solo con ícono (acciones de encabezado). */
-export function IconButton({ icon, onPress, accessibilityLabel }: { icon: IconName; onPress: () => void; accessibilityLabel: string }) {
+export function IconButton({
+  icon,
+  onPress,
+  accessibilityLabel,
+  disabled = false,
+}: {
+  icon: IconName;
+  onPress: () => void;
+  accessibilityLabel: string;
+  disabled?: boolean;
+}) {
   const theme = useTheme();
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ disabled }}
       hitSlop={6}
       style={({ pressed }) => ({
+        opacity: disabled ? 0.35 : 1,
         width: theme.layout.minTouchTarget,
         height: theme.layout.minTouchTarget,
         borderRadius: theme.radii.pill,

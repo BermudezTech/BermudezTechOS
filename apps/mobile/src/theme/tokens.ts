@@ -72,8 +72,8 @@ const shared = {
   layout: { wideBreakpoint: 1024, maxContentWidth: 1200, minTouchTarget: 44, sideNavWidth: 248 },
 };
 
-// Paleta vibrante para categorías y gráficas; legible sobre ambos temas.
-const categoryPalette = [
+// Paleta vibrante para categorías, cuentas y gráficas; legible sobre ambos temas (piso de contraste en contrast.test.ts).
+export const categoryPalette = [
   '#8B5CF6',
   '#06B6D4',
   '#F97316',
@@ -87,6 +87,13 @@ const categoryPalette = [
   '#F43F5E',
   '#84CC16',
   '#6366F1',
+  '#0EA5E9',
+  '#22C55E',
+  '#64748B',
+  '#D946EF',
+  '#F59E0B',
+  '#B45309',
+  '#FB7185',
 ];
 
 export const lightTheme: Theme = {

@@ -1,14 +1,17 @@
 import {
   APP_TIME_ZONE,
   addDays,
+  clampPeriod,
   clampDayToMonth,
   daysBetween,
   formatDateLocal,
   formatRelativeDay,
+  isSamePeriod,
   isWithin,
   localDateTimeToUtc,
   localDayKey,
   localTimeParts,
+  monthsByYear,
   periodRangeUtc,
   shiftPeriod,
   todayLocal,
@@ -123,5 +126,58 @@ describe('zona única America/Bogota', () => {
     at('2026-10-25T04:30:00Z');
     expect(formatRelativeDay('2026-10-24')).toBe('Hoy');
     expect(formatRelativeDay('2026-10-23')).toBe('Ayer');
+  });
+});
+
+describe('clampPeriod', () => {
+  const today = '2026-10-31';
+  const month = (anchor: string) => ({ granularity: 'MONTH' as const, anchor });
+  const year = (anchor: string) => ({ granularity: 'YEAR' as const, anchor });
+
+  it('deja igual un periodo dentro del rango', () => {
+    expect(clampPeriod(month('2026-05-14'), '2026-01-20', today)).toEqual(month('2026-05-14'));
+  });
+
+  it('sube al mes de `min` si queda antes', () => {
+    expect(clampPeriod(month('2025-03-01'), '2026-01-20', today)).toEqual(month('2026-01-01'));
+  });
+
+  it('baja al periodo en curso si queda después', () => {
+    expect(clampPeriod(month('2027-02-01'), '2026-01-20', today)).toEqual(month('2026-10-01'));
+    expect(clampPeriod(year('2028-01-01'), null, today)).toEqual(year('2026-01-01'));
+  });
+
+  it('sin `min` no aplica tope inferior', () => {
+    expect(clampPeriod(month('2001-01-01'), null, today)).toEqual(month('2001-01-01'));
+  });
+
+  it('en modo año compara con el año de `min`', () => {
+    expect(clampPeriod(year('2024-01-01'), '2025-08-03', today)).toEqual(year('2025-01-01'));
+    expect(clampPeriod(year('2025-06-01'), '2025-08-03', today)).toEqual(year('2025-06-01'));
+  });
+});
+
+describe('isSamePeriod', () => {
+  it('compara por mes o por año, sin importar el día', () => {
+    expect(isSamePeriod({ granularity: 'MONTH', anchor: '2026-10-01' }, { granularity: 'MONTH', anchor: '2026-10-31' })).toBe(true);
+    expect(isSamePeriod({ granularity: 'YEAR', anchor: '2026-01-01' }, { granularity: 'YEAR', anchor: '2026-10-31' })).toBe(true);
+    expect(isSamePeriod({ granularity: 'MONTH', anchor: '2026-10-01' }, { granularity: 'YEAR', anchor: '2026-10-01' })).toBe(false);
+  });
+});
+
+describe('monthsByYear', () => {
+  it('lista los meses del más reciente al más antiguo, agrupados por año', () => {
+    expect(monthsByYear('2025-11-01', '2026-02-01')).toEqual([
+      { year: 2026, months: ['2026-02-01', '2026-01-01'] },
+      { year: 2025, months: ['2025-12-01', '2025-11-01'] },
+    ]);
+  });
+
+  it('acepta días intermedios y un solo mes', () => {
+    expect(monthsByYear('2026-10-20', '2026-10-31')).toEqual([{ year: 2026, months: ['2026-10-01'] }]);
+  });
+
+  it('devuelve vacío si `from` es posterior', () => {
+    expect(monthsByYear('2026-11-01', '2026-10-01')).toEqual([]);
   });
 });

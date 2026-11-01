@@ -4,13 +4,24 @@ import { View } from 'react-native';
 
 import { useTheme } from '@/theme';
 
+import { safeIconName } from './iconGlyphs';
+
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 
 type Props = { name: IconName; size?: number; color?: string };
 
 export function Icon({ name, size = 20, color }: Props) {
   const theme = useTheme();
-  return <Ionicons name={name} size={size} color={color ?? theme.colors.text} accessibilityElementsHidden importantForAccessibility="no" />;
+  // Nombres guardados que no existen en Ionicons (datos antiguos) usan un ícono de respaldo.
+  return (
+    <Ionicons
+      name={safeIconName(name)}
+      size={size}
+      color={color ?? theme.colors.text}
+      accessibilityElementsHidden
+      importantForAccessibility="no"
+    />
+  );
 }
 
 /** Ícono dentro de un círculo de color suave. `color` debe ser hexadecimal (#RRGGBB). */

@@ -3,8 +3,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { cents } from '@/lib/money';
 import { ThemeProvider } from '@/theme';
 
+import { useFinanceStore } from '../../data/local/store';
+import { putCategory, setupLocalDb } from '../../data/local/testing';
 import { makeAccount, makeCategory } from '../../domain/testUtils';
 import type { TransactionInput } from '../../domain/types';
+import { useActiveCategories } from '../../hooks/useFinanceData';
 import { TransactionForm } from './TransactionForm';
 
 const accounts = [
@@ -80,5 +83,70 @@ describe('TransactionForm con grupo de reembolso', () => {
     await fireEvent.press(screen.getByLabelText('Guardar'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0]![0]).toMatchObject({ type: 'TRANSFER', reimbursementGroupId: null, counterAccountId: 'sav' });
+  });
+});
+
+describe('TransactionForm · crear categoría en línea', () => {
+  beforeEach(async () => {
+    await setupLocalDb();
+    for (const c of categories) putCategory(c);
+  });
+
+  /** Como en la app: las categorías llegan del store, así que la nueva aparece al crearla. */
+  function StoreBackedForm(props: Omit<React.ComponentProps<typeof TransactionForm>, 'accounts' | 'categories'>) {
+    const live = useActiveCategories();
+    return <TransactionForm accounts={accounts} categories={live} {...props} />;
+  }
+
+  async function setupLive(extra: Partial<React.ComponentProps<typeof TransactionForm>> = {}) {
+    const onSubmit = jest.fn<Promise<void>, [TransactionInput]>(() => Promise.resolve());
+    await render(
+      <ThemeProvider>
+        <StoreBackedForm onSubmit={onSubmit} allowCreateCategory {...extra} />
+      </ThemeProvider>,
+    );
+    return { onSubmit };
+  }
+
+  it('sin la prop no muestra el chip', async () => {
+    await setup();
+    expect(screen.queryByLabelText('Nueva categoría')).toBeNull();
+  });
+
+  it('muestra el chip en egreso e ingreso, no en transferencia', async () => {
+    await setupLive();
+    expect(screen.getByLabelText('Nueva categoría')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Ingreso' }));
+    expect(screen.getByLabelText('Nueva categoría')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Transferir' }));
+    expect(screen.queryByLabelText('Nueva categoría')).toBeNull();
+  });
+
+  it('crea la categoría, la deja seleccionada y conserva lo escrito', async () => {
+    const { onSubmit } = await setupLive();
+    await fireEvent.changeText(screen.getByLabelText('Monto'), '80000');
+    await fireEvent.changeText(screen.getByLabelText('Descripción'), 'Mensualidad');
+    await fireEvent.press(screen.getByLabelText('Nueva categoría'));
+    await fireEvent.changeText(screen.getByLabelText('Nombre'), 'Gimnasio');
+    await fireEvent.press(screen.getByLabelText('Crear'));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Gimnasio', checked: true })).toBeTruthy());
+    expect(screen.getByLabelText('Monto').props.value).toBe('80000');
+    expect(screen.getByLabelText('Descripción').props.value).toBe('Mensualidad');
+
+    await fireEvent.press(screen.getByLabelText('Guardar'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const created = Object.values(useFinanceStore.getState().categories).find((c) => c.name === 'Gimnasio');
+    expect(created).toMatchObject({ kind: 'EXPENSE' });
+    expect(onSubmit.mock.calls[0]![0]).toMatchObject({ categoryId: created!.id, amount: 8_000_000, description: 'Mensualidad' });
+  });
+
+  it('al cancelar no cambia nada', async () => {
+    await setupLive();
+    await fireEvent.changeText(screen.getByLabelText('Monto'), '1000');
+    await fireEvent.press(screen.getByLabelText('Nueva categoría'));
+    await fireEvent.press(screen.getByLabelText('Cancelar'));
+    expect(screen.getByLabelText('Monto').props.value).toBe('1000');
+    expect(screen.queryByRole('radio', { checked: true })).toBeNull();
+    expect(Object.values(useFinanceStore.getState().categories)).toHaveLength(categories.length);
   });
 });

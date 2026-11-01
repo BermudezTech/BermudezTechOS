@@ -130,3 +130,43 @@ export function addMonthsToYearMonth(year: number, month: number, delta: number)
   const total = year * 12 + (month - 1) + delta;
   return { year: Math.floor(total / 12), month: (total % 12) + 1 };
 }
+
+function monthStart(date: IsoDate): IsoDate {
+  return `${date.slice(0, 7)}-01`;
+}
+
+/** Ancla canónica del periodo: primer día del mes o del año. */
+function periodKey(period: Period): IsoDate {
+  return period.granularity === 'YEAR' ? `${period.anchor.slice(0, 4)}-01-01` : monthStart(period.anchor);
+}
+
+export function isSamePeriod(a: Period, b: Period): boolean {
+  return a.granularity === b.granularity && periodKey(a) === periodKey(b);
+}
+
+/** Ajusta un periodo a [periodo de `min`, periodo en curso]; `min` null ⇒ solo el tope superior. */
+export function clampPeriod(period: Period, min: IsoDate | null, today: IsoDate = todayLocal()): Period {
+  const key = periodKey(period);
+  const upper = periodKey({ ...period, anchor: today });
+  if (key > upper) return { ...period, anchor: upper };
+  if (min) {
+    const lower = periodKey({ ...period, anchor: min });
+    if (key < lower) return { ...period, anchor: lower };
+  }
+  return period;
+}
+
+/** Meses entre `from` y `to` (primer día de cada uno), del más reciente al más antiguo, agrupados por año. */
+export function monthsByYear(from: IsoDate, to: IsoDate): { year: number; months: IsoDate[] }[] {
+  const groups: { year: number; months: IsoDate[] }[] = [];
+  const first = monthStart(from);
+  let current: Period = { granularity: 'MONTH', anchor: monthStart(to) };
+  while (current.anchor >= first) {
+    const year = Number(current.anchor.slice(0, 4));
+    const last = groups[groups.length - 1];
+    if (last?.year === year) last.months.push(current.anchor);
+    else groups.push({ year, months: [current.anchor] });
+    current = shiftPeriod(current, -1);
+  }
+  return groups;
+}

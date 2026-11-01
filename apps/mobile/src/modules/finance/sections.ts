@@ -37,11 +37,15 @@ export const financeSections: FinanceSection[] = [
     description: 'Ingresos, egresos y transferencias',
     icon: 'receipt-outline',
     route: '/finance/transactions',
-    summaryCards: [
-      { id: 'month-income', Card: MonthIncomeCard, order: 1 },
-      { id: 'month-balance', Card: MonthBalanceCard, order: 3 },
-      { id: 'recent', Card: RecentTransactionsCard, order: 10 },
-    ],
+    summaryCards: [{ id: 'recent', Card: RecentTransactionsCard, order: 10 }],
+  },
+  {
+    id: 'income',
+    label: 'Ingresos por categoría',
+    description: 'Mensual y anual, con evolución',
+    icon: 'arrow-down-circle-outline',
+    route: '/finance/income',
+    summaryCards: [{ id: 'month-income', Card: MonthIncomeCard, order: 1 }],
   },
   {
     id: 'spending',
@@ -52,12 +56,27 @@ export const financeSections: FinanceSection[] = [
     summaryCards: [{ id: 'month-spending', Card: MonthSpendingCard, order: 2 }],
   },
   {
+    id: 'balance',
+    label: 'Balance',
+    description: 'Ingresos − gastos por periodo',
+    icon: 'swap-vertical-outline',
+    route: '/finance/balance',
+    summaryCards: [{ id: 'month-balance', Card: MonthBalanceCard, order: 3 }],
+  },
+  {
     id: 'net-worth',
     label: 'Patrimonio',
     description: 'Activos, pasivos y evolución',
     icon: 'analytics-outline',
     route: '/finance/net-worth',
     summaryCards: [{ id: 'net-worth', Card: NetWorthCard, order: 4 }],
+  },
+  {
+    id: 'categories',
+    label: 'Categorías',
+    description: 'Crea y edita tus categorías',
+    icon: 'pricetags-outline',
+    route: '/finance/categories',
   },
   {
     id: 'investments',

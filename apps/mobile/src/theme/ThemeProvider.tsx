@@ -1,7 +1,8 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
+import { loadThemeMode, saveThemeMode } from './themeStorage';
 import { themes, type Theme, type ThemeMode } from './tokens';
 
 type ThemeContextValue = {
@@ -14,13 +15,17 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Preferencia en memoria en esta fase (research R8).
-  const [mode, setMode] = useState<ThemeMode>('system');
+  // La preferencia se guarda en el dispositivo y se lee al montar, antes del primer render.
+  const [mode, setModeState] = useState<ThemeMode>(loadThemeMode);
+  const setMode = useCallback((next: ThemeMode) => {
+    setModeState(next);
+    saveThemeMode(next);
+  }, []);
   const system = useColorScheme();
   const reducedMotion = useReducedMotion();
   const scheme = mode === 'system' ? (system === 'dark' ? 'dark' : 'light') : mode;
 
-  const value = useMemo(() => ({ theme: themes[scheme], mode, setMode, reducedMotion }), [scheme, mode, reducedMotion]);
+  const value = useMemo(() => ({ theme: themes[scheme], mode, setMode, reducedMotion }), [scheme, mode, setMode, reducedMotion]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 

@@ -51,6 +51,7 @@ export type ErrorCode =
   | 'NOT_FOUND'
   | 'RECURRING_INCOME_TYPE'
   | 'INVALID_PERIOD'
+  | 'DUPLICATE_NAME'
   | 'INVALID';
 
 export class ValidationError extends Error {

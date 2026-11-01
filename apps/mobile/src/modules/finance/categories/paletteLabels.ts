@@ -1,0 +1,23 @@
+/** Nombres en español de los colores de `categoryPalette` (accesibilidad del selector de color). */
+export const paletteColorLabels: Record<string, string> = {
+  '#8B5CF6': 'Violeta',
+  '#06B6D4': 'Cian',
+  '#F97316': 'Naranja',
+  '#EC4899': 'Rosa',
+  '#10B981': 'Esmeralda',
+  '#3B82F6': 'Azul',
+  '#EAB308': 'Amarillo',
+  '#EF4444': 'Rojo',
+  '#14B8A6': 'Verde azulado',
+  '#A855F7': 'Púrpura',
+  '#F43F5E': 'Frambuesa',
+  '#84CC16': 'Lima',
+  '#6366F1': 'Índigo',
+  '#0EA5E9': 'Celeste',
+  '#22C55E': 'Verde',
+  '#64748B': 'Pizarra',
+  '#D946EF': 'Fucsia',
+  '#F59E0B': 'Ámbar',
+  '#B45309': 'Café',
+  '#FB7185': 'Coral',
+};

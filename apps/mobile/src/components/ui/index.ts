@@ -21,5 +21,6 @@ export { goBack, Screen, useScreenBottomPadding } from './Screen';
 export { ScreenBackground } from './ScreenBackground';
 export { SectionHeader } from './SectionHeader';
 export { SegmentedControl } from './SegmentedControl';
+export { Sheet } from './Sheet';
 export { FadeIn } from './FadeIn';
 export { Fab } from './Fab';

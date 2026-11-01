@@ -15,6 +15,7 @@ export function NetWorthChart({ points }: { points: NetWorthPoint[] }) {
   // gifted-charts añade márgenes internos al ancho indicado.
   const usable = Math.max(180, width - yAxisWidth - 48);
   const spacing = usable / Math.max(1, points.length - 1) - 1;
+  const step = Math.max(1, Math.ceil(points.length / 6));
   const values = points.map((p) => p.netWorth / 100);
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
@@ -29,7 +30,8 @@ export function NetWorthChart({ points }: { points: NetWorthPoint[] }) {
       <LineChart
         data={points.map((p, i) => ({
           value: p.netWorth / 100 - (minValue - pad),
-          label: i % 2 === 1 ? formatDateLocal(p.date, 'MMM') : '',
+          // Una etiqueta cada `step` puntos, contando desde el último (el mes actual siempre lleva la suya).
+          label: (points.length - 1 - i) % step === 0 ? formatDateLocal(p.date, points.length > 12 ? 'MMM yy' : 'MMM') : '',
         }))}
         width={usable}
         height={180}
@@ -52,7 +54,7 @@ export function NetWorthChart({ points }: { points: NetWorthPoint[] }) {
         xAxisThickness={0}
         rulesColor={theme.colors.border}
         yAxisTextStyle={{ color: theme.colors.textMuted, fontSize: 10 }}
-        xAxisLabelTextStyle={{ color: theme.colors.textMuted, fontSize: 10, width: 40 }}
+        xAxisLabelTextStyle={{ color: theme.colors.textMuted, fontSize: 10, width: points.length > 12 ? 48 : 40 }}
         formatYLabel={(label) => abbreviateCop(cents(Math.round((Number(label) + minValue - pad) * 100))).replace('$ ', '')}
         disableScroll
       />

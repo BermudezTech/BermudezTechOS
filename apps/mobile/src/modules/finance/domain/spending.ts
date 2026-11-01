@@ -1,14 +1,14 @@
-import { Decimal } from 'decimal.js';
+import type { Decimal } from 'decimal.js';
 
 import { isWithin, periodRangeUtc, shiftPeriod, type Period } from '@/lib/dates';
-import { percentOf, sub, sum, type Cents } from '@/lib/money';
+import { percentOf, sum, type Cents } from '@/lib/money';
 
-import type { Category, Transaction } from './types';
+import { delta, isPersonalFlow, type Delta } from './flows';
+import type { Category, CategoryKind, Transaction } from './types';
 
-/** Variación vs. periodo anterior: porcentaje, 'new' si antes era 0, null si ambos son 0. */
-export type Delta = Decimal | 'new' | null;
+export { delta, isPersonalExpense, type Delta } from './flows';
 
-export interface SpendingItem {
+export interface CategoryFlowItem {
   categoryId: string | null;
   name: string;
   color: string | null;
@@ -19,13 +19,17 @@ export interface SpendingItem {
   delta: Delta;
 }
 
-export interface SpendingReport {
+export interface CategoryFlowReport {
+  kind: CategoryKind;
   period: Period;
   total: Cents;
   previousTotal: Cents;
   delta: Delta;
-  items: SpendingItem[];
+  items: CategoryFlowItem[];
 }
+
+export type SpendingItem = CategoryFlowItem;
+export type SpendingReport = CategoryFlowReport;
 
 export interface EvolutionPoint {
   period: Period;
@@ -34,17 +38,9 @@ export interface EvolutionPoint {
 
 export const UNCATEGORIZED = 'Sin categoría';
 
-/**
- * Gasto personal = EXPENSE sin grupo de reembolso (data-model). Las transferencias, incluido
- * el pago de tarjeta, quedan fuera por tipo (FR-022).
- */
-export function isPersonalExpense(t: Transaction): boolean {
-  return !t.deletedAt && t.type === 'EXPENSE' && t.reimbursementGroupId === null;
-}
-
-function expensesIn(transactions: Transaction[], period: Period): Transaction[] {
+function flowsIn(transactions: Transaction[], period: Period, kind: CategoryKind): Transaction[] {
   const range = periodRangeUtc(period);
-  return transactions.filter((t) => isPersonalExpense(t) && isWithin(t.occurredAt, range));
+  return transactions.filter((t) => isPersonalFlow(t, kind) && isWithin(t.occurredAt, range));
 }
 
 function byCategory(transactions: Transaction[]): Map<string | null, Cents> {
@@ -53,19 +49,19 @@ function byCategory(transactions: Transaction[]): Map<string | null, Cents> {
   return new Map([...totals].map(([k, v]) => [k, sum(v)]));
 }
 
-/** (actual − anterior) / anterior; sin anterior ⇒ 'new'. */
-export function delta(current: Cents, previous: Cents): Delta {
-  if (previous === 0) return current === 0 ? null : 'new';
-  return new Decimal(sub(current, previous)).div(previous).mul(100);
-}
-
-export function spendingReport(transactions: Transaction[], categories: Map<string, Category>, period: Period): SpendingReport {
-  const current = byCategory(expensesIn(transactions, period));
-  const previous = byCategory(expensesIn(transactions, shiftPeriod(period, -1)));
+/** Ingresos o gastos personales del periodo agrupados por categoría, con variación vs. el anterior. */
+export function categoryFlowReport(
+  transactions: Transaction[],
+  categories: Map<string, Category>,
+  period: Period,
+  kind: CategoryKind,
+): CategoryFlowReport {
+  const current = byCategory(flowsIn(transactions, period, kind));
+  const previous = byCategory(flowsIn(transactions, shiftPeriod(period, -1), kind));
   const total = sum(current.values());
   const previousTotal = sum(previous.values());
 
-  const items: SpendingItem[] = [...current.entries()]
+  const items: CategoryFlowItem[] = [...current.entries()]
     .map(([categoryId, amount]) => {
       const category = categoryId ? categories.get(categoryId) : undefined;
       return {
@@ -80,20 +76,37 @@ export function spendingReport(transactions: Transaction[], categories: Map<stri
     })
     .sort((a, b) => b.amount - a.amount);
 
-  return { period, total, previousTotal, delta: delta(total, previousTotal), items };
+  return { kind, period, total, previousTotal, delta: delta(total, previousTotal), items };
 }
 
 /** Totales de los últimos `count` periodos, del más antiguo al actual. */
-export function spendingEvolution(transactions: Transaction[], period: Period, count = 6): EvolutionPoint[] {
+export function categoryFlowEvolution(transactions: Transaction[], period: Period, kind: CategoryKind, count = 6): EvolutionPoint[] {
   return Array.from({ length: count }, (_, i) => {
     const p = shiftPeriod(period, i - (count - 1));
-    return { period: p, total: sum(expensesIn(transactions, p).map((t) => t.amount)) };
+    return { period: p, total: sum(flowsIn(transactions, p, kind).map((t) => t.amount)) };
   });
 }
 
 /** Movimientos de una categoría (null = sin categoría) en el periodo, del más reciente al más antiguo. */
-export function categoryTransactions(transactions: Transaction[], categoryId: string | null, period: Period): Transaction[] {
-  return expensesIn(transactions, period)
+export function categoryFlowTransactions(
+  transactions: Transaction[],
+  categoryId: string | null,
+  period: Period,
+  kind: CategoryKind,
+): Transaction[] {
+  return flowsIn(transactions, period, kind)
     .filter((t) => t.categoryId === categoryId)
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+}
+
+export function spendingReport(transactions: Transaction[], categories: Map<string, Category>, period: Period): SpendingReport {
+  return categoryFlowReport(transactions, categories, period, 'EXPENSE');
+}
+
+export function spendingEvolution(transactions: Transaction[], period: Period, count = 6): EvolutionPoint[] {
+  return categoryFlowEvolution(transactions, period, 'EXPENSE', count);
+}
+
+export function categoryTransactions(transactions: Transaction[], categoryId: string | null, period: Period): Transaction[] {
+  return categoryFlowTransactions(transactions, categoryId, period, 'EXPENSE');
 }

@@ -7,6 +7,7 @@ import { CategoryDonut } from '@/modules/finance/components/spending/CategoryDon
 import { DeltaText } from '@/modules/finance/components/spending/DeltaText';
 import { EvolutionChart } from '@/modules/finance/components/spending/EvolutionChart';
 import { PeriodSwitcher } from '@/modules/finance/components/spending/PeriodSwitcher';
+import { useFirstActivityMonth } from '@/modules/finance/hooks/useMonthSummary';
 import { usePeriodParams } from '@/modules/finance/hooks/usePeriodParams';
 import { useSpendingByCategory } from '@/modules/finance/hooks/useSpending';
 import { useTheme } from '@/theme';
@@ -14,13 +15,14 @@ import { useTheme } from '@/theme';
 export default function SpendingScreen() {
   const theme = useTheme();
   const wide = useIsWide();
-  const [period, setPeriod] = usePeriodParams();
+  const firstMonth = useFirstActivityMonth();
+  const [period, setPeriod] = usePeriodParams(firstMonth);
   const { report, evolution } = useSpendingByCategory(period);
   const previousLabel = period.granularity === 'MONTH' ? 'vs. mes anterior' : 'vs. año anterior';
 
   return (
     <Screen title="Gastos por categoría" subtitle="Sin transferencias, pagos de tarjeta ni reembolsables" back>
-      <PeriodSwitcher period={period} onChange={setPeriod} />
+      <PeriodSwitcher period={period} onChange={setPeriod} min={firstMonth} />
 
       <GlassCard>
         <AppText variant="caption" tone="muted">
@@ -42,14 +44,14 @@ export default function SpendingScreen() {
             <CategoryDonut items={report.items} total={report.total} />
           </GlassCard>
           <GlassCard padded={false} style={[{ padding: theme.spacing(2) }, wide ? { flex: 1.3 } : null]}>
-            <CategoryBreakdownList items={report.items} period={period} />
+            <CategoryBreakdownList items={report.items} period={period} basePath="/finance/spending" />
           </GlassCard>
         </View>
       )}
 
       <SectionHeader title={period.granularity === 'MONTH' ? 'Últimos 6 meses' : 'Últimos 6 años'} />
       <GlassCard>
-        <EvolutionChart points={evolution} />
+        <EvolutionChart points={evolution} accessibilityPrefix="Evolución del gasto" />
       </GlassCard>
     </Screen>
   );

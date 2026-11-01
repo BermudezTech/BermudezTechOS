@@ -173,14 +173,54 @@ export function netWorthEvolution(
 ): NetWorthPoint[] {
   const { year, month } = parseIsoDate(today);
   const current = { granularity: 'MONTH' as const, anchor: isoDate(year, month, 1) };
+  // Ordenar una vez y tomar un prefijo por mes evita reinterpretar todas las fechas en cada mes (research R12).
+  const sorted = transactions.map((t) => ({ t, at: Date.parse(t.occurredAt) })).sort((a, b) => a.at - b.at);
   return Array.from({ length: months }, (_, i) => {
     const period = shiftPeriod(current, i - (months - 1));
     const { toUtc } = periodRangeUtc(period);
     const isCurrent = i === months - 1;
     const date = isCurrent ? today : addDays(localDayKey(toUtc), -1);
-    const cutoff = Date.parse(toUtc);
-    const until = isCurrent ? transactions : transactions.filter((t) => Date.parse(t.occurredAt) < cutoff);
+    const until = isCurrent ? transactions : sorted.slice(0, countBefore(sorted, Date.parse(toUtc))).map((x) => x.t);
     const report = buildReport(accounts, until, cdts, assets, date, balancesByAccount(accounts, until));
     return { date, netWorth: report.netWorth };
   });
+}
+
+/** Cantidad de elementos con `at` < cutoff en una lista ordenada (búsqueda binaria). */
+function countBefore(sorted: { at: number }[], cutoff: number): number {
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid]!.at < cutoff) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+export type NetWorthRange = '6M' | '12M' | '24M' | 'ALL';
+
+const RANGE_MONTHS: Record<Exclude<NetWorthRange, 'ALL'>, number> = { '6M': 6, '12M': 12, '24M': 24 };
+
+/**
+ * Primer mes local con datos patrimoniales: el más antiguo entre movimientos, apertura de CDTs y
+ * creación de cuentas y bienes. null si no hay ninguno (research R12).
+ */
+export function firstNetWorthMonth(accounts: Account[], transactions: Transaction[], cdts: Cdt[], assets: Asset[]): IsoDate | null {
+  const days = [
+    ...transactions.filter((t) => !t.deletedAt).map((t) => localDayKey(t.occurredAt)),
+    ...cdts.filter((c) => !c.deletedAt).map((c) => c.openedOn),
+    ...[...accounts, ...assets].filter((r) => !r.deletedAt && r.createdAt).map((r) => localDayKey(r.createdAt)),
+  ];
+  if (days.length === 0) return null;
+  return `${days.reduce((a, b) => (b < a ? b : a)).slice(0, 7)}-01`;
+}
+
+/** Meses a dibujar: el rango, recortado al historial disponible (FR-022); sin datos, solo el mes en curso. */
+export function netWorthMonthsFor(range: NetWorthRange, firstMonth: IsoDate | null, today: IsoDate): number {
+  if (firstMonth === null) return 1;
+  const first = parseIsoDate(firstMonth);
+  const now = parseIsoDate(today);
+  const history = Math.max(1, (now.year - first.year) * 12 + (now.month - first.month) + 1);
+  return range === 'ALL' ? history : Math.min(RANGE_MONTHS[range], history);
 }

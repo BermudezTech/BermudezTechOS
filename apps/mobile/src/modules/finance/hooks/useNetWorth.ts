@@ -1,23 +1,31 @@
 import { useMemo } from 'react';
 
-import { isAssetValueExpired, netWorthEvolution, netWorthReport } from '../domain/netWorth';
+import {
+  firstNetWorthMonth,
+  isAssetValueExpired,
+  netWorthEvolution,
+  netWorthMonthsFor,
+  netWorthReport,
+  type NetWorthRange,
+} from '../domain/netWorth';
 import { useActiveAccounts, useActiveAssets, useActiveCdts, useActiveTransactions, useToday } from './useFinanceData';
 
 export { createAsset, deleteAsset, updateAsset } from '../data/local/assetsRepo';
 
-export function useNetWorth() {
+/** Patrimonio actual y su evolución en el rango elegido (por defecto 12 meses). */
+export function useNetWorth(range: NetWorthRange = '12M') {
   const accounts = useActiveAccounts();
   const transactions = useActiveTransactions();
   const cdts = useActiveCdts();
   const assets = useActiveAssets();
   const today = useToday();
-  return useMemo(
-    () => ({
-      report: netWorthReport(accounts, transactions, cdts, assets, today),
-      evolution: netWorthEvolution(accounts, transactions, cdts, assets, today, 12),
-    }),
-    [accounts, transactions, cdts, assets, today],
+  const report = useMemo(() => netWorthReport(accounts, transactions, cdts, assets, today), [accounts, transactions, cdts, assets, today]);
+  const firstMonth = useMemo(() => firstNetWorthMonth(accounts, transactions, cdts, assets), [accounts, transactions, cdts, assets]);
+  const evolution = useMemo(
+    () => netWorthEvolution(accounts, transactions, cdts, assets, today, netWorthMonthsFor(range, firstMonth, today)),
+    [accounts, transactions, cdts, assets, today, range, firstMonth],
   );
+  return { report, evolution, firstMonth };
 }
 
 export function useAssets() {

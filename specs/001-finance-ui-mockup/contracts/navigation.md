@@ -35,6 +35,8 @@ Contenido inicial, en orden:
 
 ## Mapa de rutas (Expo Router)
 
+> Las rutas `/finance/income`, `/finance/balance` y `/finance/categories` (y el selector de mes del Resumen) se añadieron en la spec 008; ver [specs/008-improvements-ui-finances/contracts/navigation.md](../../008-improvements-ui-finances/contracts/navigation.md).
+
 | URL | Pantalla | Presentación | Historia |
 |---|---|---|---|
 | `/` | Inicio (solo saludo) | tab | US1 |

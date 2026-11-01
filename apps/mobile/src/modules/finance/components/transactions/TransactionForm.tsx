@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Pressable, View } from 'react-native';
 
@@ -32,6 +32,7 @@ import type { Account, Category, RecurringIncome, Transaction, TransactionInput,
 import { useActiveTransactions } from '../../hooks/useFinanceData';
 import { useRecurringIncomeLookup } from '../../hooks/useRecurringIncomes';
 import { accountTypeMeta } from '../accounts/accountMeta';
+import { CategoryEditorSheet } from '../categories/CategoryEditorSheet';
 import { RecurringIncomePicker } from '../recurringIncome/RecurringIncomePicker';
 
 export type TransactionFormDefaults = {
@@ -53,6 +54,8 @@ type Props = {
   submitLabel?: string;
   /** Selector opcional de grupo de reembolso (lo añade la sección de reembolsos). */
   renderGroupField?: (props: { value: string | null; onChange: (id: string | null) => void }) => React.ReactNode;
+  /** Muestra el chip "Nueva" para crear una categoría sin salir del formulario (spec 008, FR-012). */
+  allowCreateCategory?: boolean;
 };
 
 const typeOptions: { value: TransactionType; label: string }[] = [
@@ -70,8 +73,10 @@ export function TransactionForm({
   onSubmit,
   submitLabel = 'Guardar',
   renderGroupField,
+  allowCreateCategory = false,
 }: Props) {
   const theme = useTheme();
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const categoryMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const schema = useMemo(() => transactionFormSchema(categoryMap), [categoryMap]);
 
@@ -243,6 +248,7 @@ export function TransactionForm({
                     onPress={() => field.onChange(field.value === c.id ? null : c.id)}
                   />
                 ))}
+                {allowCreateCategory ? <NewCategoryChip onPress={() => setCreatingCategory(true)} /> : null}
               </View>
             </FormField>
           )}
@@ -287,7 +293,43 @@ export function TransactionForm({
       </GlassCard>
 
       <Button label={submitLabel} icon="checkmark" onPress={submit} disabled={formState.isSubmitting} />
+
+      {allowCreateCategory && !isTransfer ? (
+        <CategoryEditorSheet
+          visible={creatingCategory}
+          kind={type === 'INCOME' ? 'INCOME' : 'EXPENSE'}
+          onCreated={(category) => setValue('categoryId', category.id, { shouldDirty: true })}
+          onClose={() => setCreatingCategory(false)}
+        />
+      ) : null}
     </View>
+  );
+}
+
+function NewCategoryChip({ onPress }: { onPress: () => void }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Nueva categoría"
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        minHeight: theme.layout.minTouchTarget,
+        paddingHorizontal: theme.spacing(3),
+        borderRadius: theme.radii.pill,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderColor: theme.colors.accent,
+        backgroundColor: pressed ? theme.colors.surfacePressed : 'transparent',
+      })}>
+      <Icon name="add" size={16} color={theme.colors.accentText} />
+      <AppText variant="bodyStrong" color={theme.colors.accentText}>
+        Nueva
+      </AppText>
+    </Pressable>
   );
 }
 

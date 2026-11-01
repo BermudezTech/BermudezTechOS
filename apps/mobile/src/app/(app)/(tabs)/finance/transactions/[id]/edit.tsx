@@ -16,6 +16,7 @@ export default function EditTransactionScreen() {
     <Screen title="Editar movimiento" back fallback="/finance/transactions" modal>
       {tx ? (
         <TransactionForm
+          allowCreateCategory
           initial={tx}
           accounts={accounts}
           categories={categories}
