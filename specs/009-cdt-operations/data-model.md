@@ -34,7 +34,8 @@ Solo se modifica la entidad **Cdt**. No hay tablas nuevas. Las entidades Account
 - `settled*` no nulos ⇔ `status = 'RENEWED'`. El cliente siempre los fija juntos. El servidor solo valida el todo-o-nada y la aritmética, sin acoplarse al estado, para tolerar el orden de los lotes.
 
 **Derivados (no se almacenan):**
-- `maturityValue = maturityValueOverride ?? round(principal + principal·((1+EA)^(termDays/360) − 1)·(1 − ret))`
+- `maturityValue = maturityValueOverride ?? round(principal + principal·((1+EA)^(termDays/360) − 1)·(1 − ret))` (esperado; no cambia al renovar)
+- `periodFinalValue = principal + settledNetInterest` si el periodo está liquidado; si no, `maturityValue`
 - `origin = renewedFromCdtId ? 'RENEWAL' : sourceAccountId ? 'TRANSFER' : 'EXISTING'`
 - `canRenew` según R10
 - `chain`: los periodos anteriores, recorriendo `renewedFromCdtId`
@@ -46,6 +47,7 @@ Solo se modifica la entidad **Cdt**. No hay tablas nuevas. Las entidades Account
 | Account `INVESTMENT` | `createCdt` (todos los orígenes) | `openingBalance = principal` si el origen es EXISTING; `0` si es TRANSFER. Es compartida por toda la cadena de renovaciones. |
 | Transaction `TRANSFER` de apertura | `createCdt` con origen TRANSFER | `source → cuenta del CDT`, `amount = principal`, `cdtId = cdt` (como hoy) |
 | Transaction `INCOME` de interés | `renewCdt` | ID `v5(anterior:interest)`; en la cuenta del CDT; `amount = VF − principal anterior`; `occurredAt = maturesOn` del anterior a las 10:00 Bogotá; `cdtId = anterior` |
+| Transaction `INCOME`/`EXPENSE` de diferencia | `renewCdt` con capital del banco ≠ VF ± aporte/retiro | ID `v5(nuevo:difference)`; en la cuenta del CDT; `amount` = valor absoluto de la diferencia; `cdtId = nuevo`; `occurredAt = openedOn` del nuevo. Se borra al deshacer la renovación |
 | Transaction `TRANSFER` de ajuste | `renewCdt` con aporte o retiro | ID `v5(nuevo:adjustment)`. Aporte: `origen → cuenta del CDT`. Retiro: `cuenta del CDT → destino`. `cdtId = nuevo`; `occurredAt = openedOn` del nuevo |
 
 ## 3. Estados de Cdt

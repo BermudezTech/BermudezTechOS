@@ -3,7 +3,7 @@ import { CDT_ID_NAMESPACE, uuidV5 } from '@/lib/ids';
 import type { Cents } from '@/lib/money';
 
 import { canRenew, cdtOrigin, liveSuccessor, renewalPrincipal } from '../../domain/cdts';
-import { calculatedMaturityValue, nominalRate, settlement } from '../../domain/cdtValuation';
+import { nominalRate, settlement } from '../../domain/cdtValuation';
 import { cdtInputSchema } from '../../domain/schemas/cdt';
 import type { Account, Cdt, CdtInput, CdtRenewalInput, FinanceData, SyncFields, Transaction } from '../../domain/types';
 import { ValidationError } from '../FinanceRepository';
@@ -17,6 +17,7 @@ export const renewalIds = (previousId: string) => {
     cdtId,
     interestId: uuidV5(CDT_ID_NAMESPACE, `${previousId}:interest`),
     adjustmentId: uuidV5(CDT_ID_NAMESPACE, `${cdtId}:adjustment`),
+    differenceId: uuidV5(CDT_ID_NAMESPACE, `${cdtId}:difference`),
   };
 };
 
@@ -236,7 +237,9 @@ function withFixedId<T extends SyncFields>(id: string, existing: T | undefined, 
 /**
  * Renueva un CDT vencido (FR-017–FR-021, research R4/R6) en una sola operación: ingreso por el
  * interés neto del periodo que termina, liquidación del anterior (bruto/retención/neto), nuevo
- * periodo en la misma cuenta y, si aplica, la transferencia de aporte o retiro.
+ * periodo en la misma cuenta y, si aplica, la transferencia de aporte o retiro y el ajuste por la
+ * diferencia entre el capital del banco y valor final ± aporte/retiro. Los movimientos y el valor
+ * esperado del periodo anterior no se modifican.
  */
 export async function renewCdt(id: string, input: CdtRenewalInput, today: IsoDate = todayLocal()): Promise<Cdt> {
   const previous = getEntity('cdts', id);
@@ -262,9 +265,9 @@ export async function renewCdt(id: string, input: CdtRenewalInput, today: IsoDat
     if (!input.adjustmentAccountId) throw new ValidationError('INVALID', 'adjustmentAccountId', 'Elige la cuenta.');
     checkAssetAccount('adjustmentAccountId', input.adjustmentAccountId);
   }
-  if (input.principal !== renewalPrincipal(value, operation, amount)) {
-    throw new ValidationError('INVALID', 'principal', 'El capital no coincide con el valor final y el ajuste.');
-  }
+  // Si el capital que reporta el banco difiere de valor final ± ajuste, la diferencia se registra
+  // como un movimiento propio: el cierre del periodo anterior no se modifica.
+  const difference = input.principal - renewalPrincipal(value, operation, amount);
 
   const ids = renewalIds(previous.id);
   const state = useFinanceStore.getState();
@@ -291,10 +294,10 @@ export async function renewCdt(id: string, input: CdtRenewalInput, today: IsoDat
   });
   const renewal: Cdt = { ...withFixedId(ids.cdtId, state.cdts[ids.cdtId], at), ...next, accountId: previous.accountId };
   const settled = settlement(previous, value);
+  // El valor esperado del periodo anterior se conserva; el valor real del cierre queda en settled*.
   const closed: Cdt = {
     ...previous,
     status: 'RENEWED',
-    maturityValueOverride: value === calculatedMaturityValue(previous) ? previous.maturityValueOverride : value,
     settledGrossInterest: settled.gross,
     settledWithholding: settled.withholding,
     settledNetInterest: settled.net,
@@ -330,11 +333,31 @@ export async function renewCdt(id: string, input: CdtRenewalInput, today: IsoDat
           }),
           counterAccountId: operation === 'ADD' ? previous.accountId : input.adjustmentAccountId!,
         };
+  const differenceTx: Transaction | null =
+    difference === 0
+      ? null
+      : {
+          ...withFixedId(ids.differenceId, state.transactions[ids.differenceId], at),
+          ...baseTransaction({
+            accountId: previous.accountId,
+            type: difference > 0 ? 'INCOME' : 'EXPENSE',
+            amount: Math.abs(difference) as Cents,
+            occurredAt: localDateTimeToUtc(input.openedOn, 10, 0),
+            description: `Ajuste renovación CDT ${previous.issuer}`,
+            cdtId: renewal.id,
+          }),
+        };
   await batch((draft) => {
     draft.cdts[closed.id] = closed;
     draft.cdts[renewal.id] = renewal;
     if (interest) draft.transactions[interest.id] = interest;
     if (adjustment) draft.transactions[adjustment.id] = adjustment;
+    // Con ID determinista: si una renovación previa (deshecha) tuvo diferencia y esta no, queda borrada.
+    const staleDifference = draft.transactions[ids.differenceId];
+    if (differenceTx) draft.transactions[differenceTx.id] = differenceTx;
+    else if (staleDifference && !staleDifference.deletedAt) {
+      draft.transactions[ids.differenceId] = { ...staleDifference, deletedAt: at, updatedAt: at };
+    }
   });
   return renewal;
 }

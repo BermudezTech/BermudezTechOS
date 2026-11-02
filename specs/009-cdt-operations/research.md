@@ -55,16 +55,14 @@ El formulario guarda override solo si el usuario editó el campo. Si después ca
 
 ## R4. Capital editable en la renovación
 
-**Decisión**: en la renovación, valor final anterior (VF), operación (± monto) y capital nuevo están ligados por `capitalNuevo = VF ± monto`:
+**Decisión** (revisada el 2026-11-02): el capital nuevo se propone como `VF ± monto` y sigue a esos campos mientras el usuario no lo edite. Si lo edita con el valor del banco, la diferencia `capitalNuevo − (VF ± monto)` se registra como una transacción propia: `INCOME` si es positiva, `EXPENSE` si es negativa. Su ID determinista es `v5("<nuevoId>:difference")`; va en la cuenta del CDT, con `cdtId = nuevo` y fecha = inicio del nuevo periodo. Así el saldo de la cuenta del CDT sigue siendo igual al capital (SC-004).
 
-- Si el usuario edita VF → se recalcula el capital nuevo.
-- Si edita el capital nuevo → se recalcula VF (`VF = capitalNuevo ∓ monto`), que pasa a ser el override del periodo que cierra.
+**Razón**: cada movimiento y cada cierre de periodo mantienen sus datos íntegros. Editar el periodo nuevo no reescribe el anterior.
 
-Así el saldo de la cuenta del CDT siempre es igual al capital del nuevo periodo (SC-004).
-
-**Razón**: si el banco reporta un capital de renovación distinto, la diferencia está en el interés del periodo anterior. Ajustar VF mantiene cuadrados el saldo, el ingreso por interés y la retención (R6).
-
-**Alternativas**: capital libre sin tocar VF. Se rechazó porque el saldo de la cuenta dejaría de coincidir con el capital.
+**Alternativas**:
+- Recalcular hacia atrás el VF anterior. Era la versión inicial; se rechazó porque modificaba el cierre del periodo anterior.
+- Capital no editable.
+- Capital libre sin movimiento, que descuadra el saldo.
 
 ## R5. Origen del dinero: CDT existente sin movimiento
 
@@ -93,7 +91,7 @@ Así el saldo de la cuenta del CDT siempre es igual al capital del nuevo periodo
    - `settledNetInterest = VF − capital`.
    - `settledGrossInterest = round(neto / (1 − ret))`.
    - `settledWithholding = bruto − neto`. Así bruto − retención = neto exacto en centavos.
-   - Además `status = 'RENEWED'` y `maturityValueOverride = VF` si VF difiere del calculado.
+   - Además `status = 'RENEWED'`. El `maturityValueOverride` del anterior **no** se toca: el valor real del cierre vive solo en `settled*` (valor final = `principal + settledNetInterest`), y deshacer la renovación devuelve exactamente el valor esperado original.
 3. **Nuevo periodo**:
    - Mismo `accountId`, `renewedFromCdtId = anterior` y `sourceAccountId = null`.
    - Copia `issuer`, `interestPayment` y `payoutAccountId`; los dos últimos se pueden editar.
@@ -105,6 +103,7 @@ IDs **deterministas (UUIDv5)** con un namespace propio de CDT:
 - nuevo periodo = `v5("<anteriorId>:renewal")`
 - interés = `v5("<anteriorId>:interest")`
 - ajuste = `v5("<nuevoId>:adjustment")`
+- diferencia de capital = `v5("<nuevoId>:difference")` (R4)
 
 Si se renueva el mismo CDT en dos dispositivos sin conexión, los registros chocan por ID y gana el último (LWW) en vez de duplicarse. Esto cubre el caso borde "conflicto de renovación offline" sin lógica extra en el servidor.
 

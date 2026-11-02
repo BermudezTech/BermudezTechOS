@@ -17,10 +17,10 @@ export interface CdtSummary {
 
 export interface CdtValues {
   cdt: Cdt;
-  /** Valor neto esperado al vencimiento (ajustado al banco o calculado). */
+  /** Valor neto al vencimiento: el liquidado si se renovó; si no, el esperado (banco o calculado). */
   maturityValue: Cents;
   isOverridden: boolean;
-  /** Bruto, retención y neto del periodo según `maturityValue`. */
+  /** Bruto, retención y neto: los guardados al renovar, o los esperados del periodo vigente. */
   settlement: Settlement;
   daysElapsed: number;
   daysRemaining: number;
@@ -82,12 +82,6 @@ export function renewalPrincipal(previousValue: Cents, operation: RenewalOperati
   return (operation === 'WITHDRAW' ? previousValue - delta : previousValue + delta) as Cents;
 }
 
-/** Inversa de `renewalPrincipal`: valor final anterior implícito en un capital editado. */
-export function previousValueFromPrincipal(principal: Cents, operation: RenewalOperation, amount: Cents | null): Cents {
-  const delta = operation === 'RENEW' ? 0 : (amount ?? 0);
-  return (operation === 'WITHDRAW' ? principal + delta : principal - delta) as Cents;
-}
-
 /** Rendimiento promedio ponderado = Σ(principal × EA) / Σ principal sobre CDTs ACTIVE. */
 export function cdtSummary(cdts: Cdt[]): CdtSummary {
   const active = cdts.filter((c) => !c.deletedAt && c.status === 'ACTIVE');
@@ -107,14 +101,27 @@ export function sortByMaturity(cdts: Cdt[]): Cdt[] {
   return [...cdts].sort((a, b) => statusOrder[a.status] - statusOrder[b.status] || a.maturesOn.localeCompare(b.maturesOn));
 }
 
+/** Liquidación guardada al renovar (FR-019a), o `null` si el periodo sigue vigente. */
+export function settledOf(cdt: Cdt): Settlement | null {
+  if (cdt.settledGrossInterest === null || cdt.settledWithholding === null || cdt.settledNetInterest === null) return null;
+  return { gross: cdt.settledGrossInterest, withholding: cdt.settledWithholding, net: cdt.settledNetInterest };
+}
+
+/** Valor final de un periodo: el liquidado si ya se renovó; si no, el esperado. */
+export function periodFinalValue(cdt: Cdt): Cents {
+  const settled = settledOf(cdt);
+  return settled ? ((cdt.principal + settled.net) as Cents) : maturityValue(cdt);
+}
+
 export function cdtValues(cdt: Cdt, cdts: Cdt[], today: IsoDate): CdtValues {
-  const value = maturityValue(cdt);
+  const settled = settledOf(cdt);
+  const value = periodFinalValue(cdt);
   const byId = Object.fromEntries(cdts.map((c) => [c.id, c]));
   return {
     cdt,
     maturityValue: value,
-    isOverridden: cdt.maturityValueOverride !== null,
-    settlement: settlement(cdt, value),
+    isOverridden: settled ? value !== maturityValue(cdt) : cdt.maturityValueOverride !== null,
+    settlement: settled ?? settlement(cdt, value),
     daysElapsed: Math.max(0, Math.min(cdt.termDays, daysBetween(cdt.openedOn, today))),
     daysRemaining: Math.max(0, daysBetween(today, cdt.maturesOn)),
     maturingSoon: isMaturingSoon(cdt, today),

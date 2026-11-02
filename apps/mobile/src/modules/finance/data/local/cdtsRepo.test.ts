@@ -226,14 +226,44 @@ describe('renewCdt (US5)', () => {
     expect(balanceOf(previous.accountId)).toBe(next.principal);
   });
 
-  it('con valor final ajustado al banco guarda el override y la liquidación cuadra', async () => {
+  it('con valor final ajustado al banco: la liquidación cuadra y el valor esperado del anterior no cambia', async () => {
     const previous = await maturedCdt();
     const bank = cents(10_470_000_00);
     await renewCdt(previous.id, renewal(previous, { previousMaturityValue: bank }), TODAY);
     const closed = state().cdts[previous.id]!;
-    expect(closed.maturityValueOverride).toBe(bank);
+    expect(closed.maturityValueOverride).toBe(previous.maturityValueOverride);
     expect(closed.settledGrossInterest! - closed.settledWithholding!).toBe(closed.settledNetInterest);
     expect(closed.settledNetInterest).toBe(bank - previous.principal);
+  });
+
+  it('capital del banco distinto: registra la diferencia como ajuste y no toca nada del periodo anterior', async () => {
+    const savings = await createAccount(accountInput({ openingBalance: cents(20_000_000_00) }));
+    const previous = await createCdt(cdtInput({ sourceAccountId: savings.id }));
+    const openingBefore = { ...liveTransactions()[0]! };
+    const value = calculatedMaturityValue(previous);
+    const bankPrincipal = (value + 1_234_56) as Cents;
+
+    const next = await renewCdt(previous.id, renewal(previous, { principal: bankPrincipal }), TODAY);
+
+    expect(next.principal).toBe(bankPrincipal);
+    const difference = state().transactions[uuidV5(CDT_ID_NAMESPACE, `${next.id}:difference`)]!;
+    expect(difference).toMatchObject({ type: 'INCOME', accountId: previous.accountId, amount: 1_234_56, cdtId: next.id });
+    // El cierre del anterior refleja el valor final indicado, no el capital nuevo.
+    expect(state().cdts[previous.id]!.settledNetInterest).toBe(value - previous.principal);
+    expect(state().cdts[previous.id]!.maturityValueOverride).toBeNull();
+    // La transferencia de apertura queda intacta.
+    expect(state().transactions[openingBefore.id]).toEqual(openingBefore);
+    expect(balanceOf(previous.accountId)).toBe(bankPrincipal);
+
+    // Capital menor: la diferencia es un egreso. Al deshacer y renovar sin diferencia, el ajuste se borra.
+    await deleteCdt(next.id);
+    expect(state().transactions[difference.id]!.deletedAt).not.toBeNull();
+    await renewCdt(previous.id, renewal(previous, { principal: (value - 50_00) as Cents }), TODAY);
+    expect(state().transactions[difference.id]).toMatchObject({ type: 'EXPENSE', amount: 50_00, deletedAt: null });
+    await deleteCdt(next.id);
+    await renewCdt(previous.id, renewal(previous), TODAY);
+    expect(state().transactions[difference.id]!.deletedAt).not.toBeNull();
+    expect(balanceOf(previous.accountId)).toBe(value);
   });
 
   it('rechaza renovar antes del vencimiento, dos veces, retiros ≥ valor final y valor < capital', async () => {

@@ -31,6 +31,11 @@ La app ya permite registrar CDTs (spec 001, §10): cada CDT crea una cuenta de i
 - Q: Al borrar un CDT, ¿se borran sus movimientos y su cuenta de inversión? → A: sí, se borra todo (CDT, cuenta de inversión, movimientos y datos de interés/retención liquidados) y los saldos se restauran.
 - Q: ¿La cuenta destino al vencer puede quedar vacía? → A: sí; es opcional al crear y al renovar, y "Solo renovar" no requiere ninguna cuenta.
 
+### Session 2026-11-02
+
+- Q: Al renovar, si el capital que reporta el banco no coincide con valor final ± aporte/retiro, ¿cómo se registra la diferencia? → A: con un movimiento de ajuste propio (ingreso o egreso) en la fecha de inicio del nuevo periodo. El cierre del periodo anterior y sus movimientos nunca se modifican.
+- Q: ¿Qué muestra el historial? → A: por cada periodo, capital, interés bruto, retención, interés neto y valor final (liquidado en periodos renovados). Cada periodo se puede abrir para ver su detalle.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Fecha de vencimiento en días comerciales (Priority: P1)
@@ -80,7 +85,7 @@ Como usuario, en los formularios de creación y renovación ingreso capital, TEA
 1. **Given** el formulario, **When** el usuario ingresa capital, TEA, plazo y retención, **Then** la app muestra el valor neto esperado al vencimiento y la tasa nominal calculados, sin pedir la tasa nominal.
 2. **Given** el valor final calculado, **When** el usuario lo edita con el valor del banco, **Then** se guarda el valor editado, la tasa nominal se recalcula con base en ese valor y la TEA se conserva como la ingresó el usuario.
 3. **Given** el valor final editado manualmente, **When** el usuario cambia después capital, TEA, plazo o retención, **Then** la app avisa que el valor final fue ajustado a mano y ofrece recalcularlo; no lo sobrescribe sin confirmación.
-4. **Given** el valor inicial (capital) calculado en una renovación, **When** el usuario lo edita con el valor que reporta el banco, **Then** se guarda el valor editado y el valor final y la tasa nominal se recalculan a partir de él (salvo que el valor final también se haya editado a mano).
+4. **Given** el valor inicial (capital) calculado en una renovación, **When** el usuario lo edita con el valor que reporta el banco, **Then** se guarda el valor editado, la diferencia con valor final ± aporte/retiro se registra como un movimiento de ajuste, y el valor final y la tasa nominal del nuevo periodo se recalculan a partir de él (salvo que el valor final también se haya editado a mano). El periodo anterior no cambia.
 5. **Given** el detalle de un CDT, **When** el usuario lo abre, **Then** ve el valor neto esperado al vencimiento y no ve "interés causado a la fecha" ni "valor actual estimado".
 
 ---
@@ -187,11 +192,11 @@ Como usuario, cuando un CDT llega a su fecha de vencimiento, quiero renovarlo el
 - **FR-017**: La acción "Renovar" MUST estar deshabilitada mientras la fecha de hoy (America/Bogota) sea anterior a la fecha de vencimiento; mientras esté deshabilitada MUST indicar la fecha desde la cual estará disponible. Desde el día del vencimiento (inclusive) MUST estar habilitada.
 - **FR-018**: El formulario de renovación MUST ofrecer tres operaciones excluyentes: "Solo renovar", "Agregar capital" (monto > 0 y cuenta de origen de activo) y "Retirar capital" (monto > 0, menor que el valor final, y cuenta destino de activo).
 - **FR-018a**: La "cuenta destino al vencer" del CDT MUST ser opcional al crear y al renovar. "Solo renovar" MUST poder confirmarse sin ninguna cuenta de origen ni destino. En "Retirar capital", si el CDT tiene cuenta destino definida, MUST proponerse como cuenta destino del retiro (editable); si no la tiene, el usuario MUST elegir una para ese retiro.
-- **FR-019**: Al confirmar la renovación, el sistema MUST, en una sola operación atómica: (a) registrar como ingreso en la cuenta del CDT el interés neto del periodo que termina (valor final − capital), fechado en el vencimiento; (b) registrar la transferencia de aporte o retiro, si aplica, fechada en el inicio del nuevo periodo; (c) marcar el CDT anterior como "Renovado"; (d) crear el nuevo periodo como "Activo", enlazado al anterior, con capital = valor final ± aporte/retiro (editable según FR-009).
+- **FR-019**: Al confirmar la renovación, el sistema MUST, en una sola operación atómica: (a) registrar como ingreso en la cuenta del CDT el interés neto del periodo que termina (valor final − capital), fechado en el vencimiento; (b) registrar la transferencia de aporte o retiro, si aplica, fechada en el inicio del nuevo periodo; (c) marcar el CDT anterior como "Renovado"; (d) crear el nuevo periodo como "Activo", enlazado al anterior, con capital = valor final ± aporte/retiro (editable según FR-009); (e) si el capital editado difiere de valor final ± aporte/retiro, registrar la diferencia como un movimiento de ajuste (ingreso si es positiva, egreso si es negativa) en la cuenta del CDT, fechado en el inicio del nuevo periodo. La renovación MUST NOT modificar los movimientos existentes ni el valor esperado del periodo anterior; su resultado real queda solo en la liquidación (FR-019a).
 - **FR-019a**: Al cerrar un periodo (renovación), el sistema MUST guardar de forma independiente y sincronizable, asociados a ese periodo y a su fecha de vencimiento: interés bruto, monto de retención en la fuente (en dinero, al centavo) e interés neto, tal que bruto − retención = neto. Si el valor final fue editado, bruto = neto ÷ (1 − tasa de retención) y retención = bruto − neto, redondeados al centavo. Estos datos MUST NOT generar movimientos adicionales; quedan disponibles para el cálculo de impuestos de specs posteriores.
 - **FR-020**: El nuevo periodo MUST mantenerse en la misma cuenta de inversión que el anterior, para que el saldo del CDT sea continuo a lo largo de las renovaciones.
 - **FR-021**: La fecha de inicio del nuevo periodo MUST ser por defecto la fecha de vencimiento anterior, y su vencimiento se calcula con FR-001.
-- **FR-022**: El detalle del CDT MUST mostrar el historial de periodos de su cadena (capital, TEA, apertura, vencimiento, valor final).
+- **FR-022**: El detalle del CDT MUST mostrar el historial de periodos de su cadena con, por periodo: apertura, vencimiento, TEA, plazo, capital, interés bruto, retención, interés neto y valor final (los liquidados en periodos renovados, los esperados en el vigente). Cada periodo MUST poder abrirse para ver su detalle.
 
 **General**
 

@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { View } from 'react-native';
 
@@ -21,7 +21,7 @@ import { parseAmount, toInputString, type Cents } from '@/lib/money';
 import { useTheme } from '@/theme';
 
 import { ValidationError } from '../../data/FinanceRepository';
-import { defaultMaturesOn, previousValueFromPrincipal, renewalPrincipal, type CdtValues } from '../../domain/cdts';
+import { defaultMaturesOn, renewalPrincipal, type CdtValues } from '../../domain/cdts';
 import { settlement } from '../../domain/cdtValuation';
 import { cdtRenewalFormSchema, interestPayments, type CdtRenewalFormOutput, type CdtRenewalFormValues } from '../../domain/schemas/cdt';
 import type { CdtRenewalInput, RenewalOperation } from '../../domain/types';
@@ -95,18 +95,25 @@ export function CdtRenewalForm({ values, onSubmit }: Props) {
     }
   }, [openedOn, termDays, setValue]);
 
-  // R4: capital nuevo = valor final anterior ± ajuste; editar uno recalcula el otro.
+  // Capital nuevo = valor final anterior ± ajuste mientras no se edite. Si el banco reporta otro
+  // capital, la diferencia se registra como un movimiento de ajuste: el periodo anterior no cambia.
+  const [principalEdited, setPrincipalEdited] = useState(false);
   const syncPrincipal = (next: { value?: string; operation?: RenewalOperation; amount?: string }) => {
+    if (principalEdited) return;
     const value = amountOf(next.value ?? getValues('previousMaturityValue'));
     const op = next.operation ?? getValues('operation');
     const amount = amountOf(next.amount ?? getValues('amount'));
     if (value !== null) setValue('principal', toInputString(renewalPrincipal(value, op, amount)));
   };
-  const syncPreviousValue = (principalText: string) => {
-    const newPrincipal = amountOf(principalText);
-    if (newPrincipal === null) return;
-    const value = previousValueFromPrincipal(newPrincipal, getValues('operation'), amountOf(getValues('amount')));
-    setValue('previousMaturityValue', toInputString(value));
+  const expectedPrincipal = (() => {
+    const value = amountOf(previousValueText);
+    return value === null ? null : renewalPrincipal(value, operation, amountOf(getValues('amount')));
+  })();
+  const principalValue = amountOf(principal);
+  const difference = expectedPrincipal !== null && principalValue !== null ? principalValue - expectedPrincipal : 0;
+  const resetPrincipal = () => {
+    setPrincipalEdited(false);
+    if (expectedPrincipal !== null) setValue('principal', toInputString(expectedPrincipal));
   };
 
   const previousValue = amountOf(previousValueText);
@@ -287,12 +294,12 @@ export function CdtRenewalForm({ values, onSubmit }: Props) {
               <FormField
                 label="Capital"
                 error={fieldState.error?.message}
-                hint="Valor final ± ajuste. Si lo editas, se recalcula el valor final anterior.">
+                hint="Valor final ± aporte o retiro. Ajústalo si el banco reporta otro capital.">
                 <AmountInput
                   value={field.value}
                   onChangeText={(text) => {
                     field.onChange(text);
-                    syncPreviousValue(text);
+                    setPrincipalEdited(true);
                   }}
                   hasError={!!fieldState.error}
                   large={false}
@@ -301,6 +308,21 @@ export function CdtRenewalForm({ values, onSubmit }: Props) {
               </FormField>
             )}
           />
+          {principalEdited && difference !== 0 ? (
+            <View style={{ gap: theme.spacing(2) }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: theme.spacing(2) }}>
+                <Badge label="Ajustado al banco" tone="info" icon="create-outline" />
+                <AppText variant="caption" tone="muted" style={{ flexShrink: 1 }}>
+                  Se registrará un ajuste de
+                </AppText>
+                <Amount value={Math.abs(difference) as Cents} variant={difference > 0 ? 'income' : 'expense'} hideZeroCents={false} />
+              </View>
+              <AppText variant="caption" tone="muted">
+                El cierre del periodo anterior no se modifica.
+              </AppText>
+              <Button label="Usar valor final ± ajuste" icon="refresh" variant="ghost" compact onPress={resetPrincipal} />
+            </View>
+          ) : null}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing(3) }}>
             {rate('annualRateEa', 'Tasa E.A. (%)')}
             {rate('withholdingRate', 'Retención en la fuente (%)')}

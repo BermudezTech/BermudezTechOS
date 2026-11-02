@@ -1,14 +1,13 @@
 import { router } from 'expo-router';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Amount, AppText, Badge, Button, confirm, GlassCard, notify, ProgressBar } from '@/components/ui';
 import { formatDateLocal } from '@/lib/dates';
-import { formatCop, type Cents } from '@/lib/money';
 import { useTheme } from '@/theme';
 
 import { ValidationError } from '../../data/FinanceRepository';
-import { cdtOrigin, type CdtValues } from '../../domain/cdts';
-import { maturityValue } from '../../domain/cdtValuation';
+import { cdtOrigin, periodFinalValue, settledOf, type CdtValues } from '../../domain/cdts';
+import { maturityValue, settlement } from '../../domain/cdtValuation';
 import type { Account, Cdt } from '../../domain/types';
 import { cdtDeletionPreview, deleteCdt } from '../../hooks/useCdts';
 import { cdtStatusLabels, formatRate, interestPaymentLabels } from './labels';
@@ -17,9 +16,8 @@ type Props = { values: CdtValues; accounts: Map<string, Account> };
 
 const longDate = (date: string) => formatDateLocal(date, "d 'de' MMMM 'de' yyyy");
 
-/** Valor final de un periodo: el liquidado si ya se renovó, si no el esperado. */
-const periodValue = (cdt: Cdt): Cents =>
-  cdt.settledNetInterest !== null ? ((cdt.principal + cdt.settledNetInterest) as Cents) : maturityValue(cdt);
+/** Bruto, retención y neto de un periodo: los guardados al renovar, o los esperados. */
+const periodSettlement = (cdt: Cdt) => settledOf(cdt) ?? settlement(cdt, maturityValue(cdt));
 
 export function CdtDetailPanel({ values, accounts }: Props) {
   const theme = useTheme();
@@ -75,9 +73,9 @@ export function CdtDetailPanel({ values, accounts }: Props) {
           </View>
           <View>
             <AppText variant="caption" tone="muted">
-              Valor neto esperado al vencimiento
+              {settledOf(cdt) ? 'Valor final liquidado al renovar' : 'Valor neto esperado al vencimiento'}
             </AppText>
-            <Amount value={periodValue(cdt)} size="large" hideZeroCents={false} />
+            <Amount value={values.maturityValue} size="large" hideZeroCents={false} />
           </View>
           {active ? (
             <>
@@ -150,19 +148,46 @@ export function CdtDetailPanel({ values, accounts }: Props) {
         <GlassCard>
           <View style={{ gap: theme.spacing(3) }}>
             <AppText variant="bodyStrong">Historial</AppText>
-            {chain.map((period) => (
-              <View key={period.id} style={{ gap: 2 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
-                  <AppText variant={period.id === cdt.id ? 'bodyStrong' : 'body'}>
-                    {formatDateLocal(period.openedOn, 'd MMM yyyy')} → {formatDateLocal(period.maturesOn, 'd MMM yyyy')}
+            <AppText variant="caption" tone="muted">
+              Toca un periodo para ver su detalle. Los periodos renovados muestran lo liquidado.
+            </AppText>
+            {[...chain].reverse().map((period) => {
+              const current = period.id === cdt.id;
+              const liquidated = settledOf(period) !== null;
+              const parts = periodSettlement(period);
+              return (
+                <Pressable
+                  key={period.id}
+                  disabled={current}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Periodo del ${longDate(period.openedOn)} al ${longDate(period.maturesOn)}`}
+                  onPress={() => router.push(`/finance/investments/${period.id}`)}
+                  style={({ pressed }) => ({
+                    gap: theme.spacing(1),
+                    padding: theme.spacing(3),
+                    borderRadius: theme.radii.md,
+                    backgroundColor: current ? theme.colors.surfaceStrong : pressed ? theme.colors.surfacePressed : 'transparent',
+                  })}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <AppText variant="bodyStrong" style={{ flexShrink: 1 }}>
+                      {formatDateLocal(period.openedOn, 'd MMM yyyy')} → {formatDateLocal(period.maturesOn, 'd MMM yyyy')}
+                    </AppText>
+                    <Badge label={current ? 'Este periodo' : cdtStatusLabels[period.status]} tone={current ? 'accent' : 'neutral'} />
+                  </View>
+                  <AppText variant="caption" tone="muted">
+                    {formatRate(period.annualRateEa)} E.A. · {period.termDays} días · retención {formatRate(period.withholdingRate)}
                   </AppText>
-                  <Amount value={periodValue(period)} hideZeroCents={false} />
-                </View>
-                <AppText variant="caption" tone="muted">
-                  Capital {formatCop(period.principal)} · {formatRate(period.annualRateEa)} E.A. · {cdtStatusLabels[period.status]}
-                </AppText>
-              </View>
-            ))}
+                  <Row label="Capital" value={<Amount value={period.principal} hideZeroCents={false} />} />
+                  <Row label="Interés bruto" value={<Amount value={parts.gross} hideZeroCents={false} />} />
+                  <Row label="Retención" value={<Amount value={parts.withholding} variant="expense" hideZeroCents={false} />} />
+                  <Row label="Interés neto" value={<Amount value={parts.net} variant="income" hideZeroCents={false} />} />
+                  <Row
+                    label={liquidated ? 'Valor final liquidado' : 'Valor final esperado'}
+                    value={<Amount value={periodFinalValue(period)} hideZeroCents={false} />}
+                  />
+                </Pressable>
+              );
+            })}
           </View>
         </GlassCard>
       ) : null}

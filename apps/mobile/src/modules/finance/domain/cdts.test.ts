@@ -9,7 +9,6 @@ import {
   defaultMaturesOn,
   isMaturingSoon,
   liveSuccessor,
-  previousValueFromPrincipal,
   renewalPrincipal,
   sortByMaturity,
 } from './cdts';
@@ -50,6 +49,18 @@ describe('cdts', () => {
     expect(values.settlement.net).toBe(46_856_494);
     expect(values.daysElapsed).toBe(30);
     expect(values.chain).toEqual([cdt]);
+    const renewed = makeCdt({
+      ...cdt,
+      status: 'RENEWED',
+      settledGrossInterest: cents(48_958_333),
+      settledWithholding: cents(1_958_333),
+      settledNetInterest: cents(47_000_000),
+    });
+    expect(cdtValues(renewed, [renewed], '2026-08-01')).toMatchObject({
+      maturityValue: 1_047_000_000,
+      isOverridden: true,
+      settlement: { gross: 48_958_333, withholding: 1_958_333, net: 47_000_000 },
+    });
     const adjusted = makeCdt({ ...cdt, maturityValueOverride: cents(1_047_000_000) });
     expect(cdtValues(adjusted, [adjusted], '2026-02-14')).toMatchObject({ maturityValue: 1_047_000_000, isOverridden: true });
   });
@@ -86,15 +97,12 @@ describe('renovación: sucesor, disponibilidad, cadena y capital', () => {
     expect(cdtChain(a, { a, b, c }).map((x) => x.id)).toEqual(['a']);
   });
 
-  it('renewalPrincipal y previousValueFromPrincipal son inversas', () => {
+  it('renewalPrincipal: valor final ± aporte/retiro', () => {
     const value = cents(10_000_000_00);
     const amount = cents(1_500_000_00);
     expect(renewalPrincipal(value, 'RENEW', amount)).toBe(value);
     expect(renewalPrincipal(value, 'ADD', amount)).toBe(11_500_000_00);
     expect(renewalPrincipal(value, 'WITHDRAW', amount)).toBe(8_500_000_00);
-    for (const op of ['RENEW', 'ADD', 'WITHDRAW'] as const) {
-      expect(previousValueFromPrincipal(renewalPrincipal(value, op, amount), op, amount)).toBe(value);
-    }
   });
 });
 
