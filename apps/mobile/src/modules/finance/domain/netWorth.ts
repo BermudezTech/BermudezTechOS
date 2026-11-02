@@ -181,6 +181,12 @@ export function netWorthEvolution(
   });
 }
 
+/** Variación del último punto frente al anterior (cierre del mes pasado); 0 con menos de dos puntos. */
+export function netWorthMonthDelta(points: NetWorthPoint[]): Cents {
+  if (points.length < 2) return ZERO;
+  return sub(points[points.length - 1]!.netWorth, points[points.length - 2]!.netWorth);
+}
+
 /** Cantidad de elementos con `at` < cutoff en una lista ordenada (búsqueda binaria). */
 function countBefore(sorted: { at: number }[], cutoff: number): number {
   let lo = 0;

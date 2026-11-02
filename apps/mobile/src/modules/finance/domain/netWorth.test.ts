@@ -1,6 +1,13 @@
 import { cents } from '@/lib/money';
 
-import { firstNetWorthMonth, isAssetValueExpired, netWorthEvolution, netWorthMonthsFor, netWorthReport } from './netWorth';
+import {
+  firstNetWorthMonth,
+  isAssetValueExpired,
+  netWorthEvolution,
+  netWorthMonthDelta,
+  netWorthMonthsFor,
+  netWorthReport,
+} from './netWorth';
 import { makeAccount, makeCdt, makeTx } from './testUtils';
 import type { Asset } from './types';
 
@@ -72,6 +79,26 @@ describe('netWorthEvolution', () => {
     expect(points[10]?.date).toBe('2026-09-30');
     // En julio aún no existía la deuda ni el CDT: 1.000.000 (ahorros) + bien.
     expect(points[8]).toEqual({ date: '2026-07-31', netWorth: 1_000_000 + 5_000_000 });
+  });
+});
+
+describe('netWorthMonthDelta', () => {
+  it('es el último punto menos el anterior (variación vs. cierre del mes pasado)', () => {
+    const points = netWorthEvolution(accounts, txs, [cdt], [car], TODAY, 12);
+    expect(netWorthMonthDelta(points)).toBe(points[11]!.netWorth - points[10]!.netWorth);
+  });
+
+  it('con menos de dos puntos es cero', () => {
+    expect(netWorthMonthDelta([])).toBe(0);
+    expect(netWorthMonthDelta([{ date: TODAY, netWorth: cents(500) }])).toBe(0);
+  });
+
+  it('puede ser negativa', () => {
+    const points = [
+      { date: '2026-09-30', netWorth: cents(1_000) },
+      { date: TODAY, netWorth: cents(400) },
+    ];
+    expect(netWorthMonthDelta(points)).toBe(-600);
   });
 });
 

@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { AppState } from 'react-native';
 
 import { todayLocal } from '@/lib/dates';
 
@@ -56,6 +57,30 @@ export function useBalances() {
 /** Día local de hoy (estable durante el render). */
 export function useToday() {
   return useMemo(() => todayLocal(), []);
+}
+
+/**
+ * Hoy en Bogotá, vivo: se revisa cada minuto y al volver la app a primer plano, y solo
+ * cambia (y re-renderiza) cuando cambia el día (spec 010, research R4).
+ */
+export function useLiveToday() {
+  const [today, setToday] = useState(() => todayLocal());
+  useEffect(() => {
+    const refresh = () =>
+      setToday((prev) => {
+        const next = todayLocal();
+        return next === prev ? prev : next;
+      });
+    const timer = setInterval(refresh, 60_000);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
+  }, []);
+  return today;
 }
 
 /** Mapa id → categoría. */

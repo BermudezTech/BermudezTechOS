@@ -8,7 +8,7 @@ import { useTheme } from '@/theme';
 import type { NetWorthPoint } from '../../domain/netWorth';
 import { useWidth } from '../spending/useWidth';
 
-export function NetWorthChart({ points }: { points: NetWorthPoint[] }) {
+export function NetWorthChart({ points, height = 180 }: { points: NetWorthPoint[]; height?: number }) {
   const theme = useTheme();
   const { width, onLayout } = useWidth();
   const yAxisWidth = 56;
@@ -34,7 +34,7 @@ export function NetWorthChart({ points }: { points: NetWorthPoint[] }) {
           label: (points.length - 1 - i) % step === 0 ? formatDateLocal(p.date, points.length > 12 ? 'MMM yy' : 'MMM') : '',
         }))}
         width={usable}
-        height={180}
+        height={height}
         spacing={spacing}
         initialSpacing={4}
         endSpacing={4}

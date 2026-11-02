@@ -39,6 +39,7 @@ export default function AppLayout() {
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: theme.colors.background } }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="reauth" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="quick-transaction" options={{ presentation: 'modal' }} />
           </Stack>
         </View>
       </SafeAreaInsetsContext.Provider>

@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 
+import type { IsoDate } from '@/lib/dates';
+
 import {
   firstNetWorthMonth,
   isAssetValueExpired,
@@ -12,13 +14,17 @@ import { useActiveAccounts, useActiveAssets, useActiveCdts, useActiveTransaction
 
 export { createAsset, deleteAsset, updateAsset } from '../data/local/assetsRepo';
 
-/** Patrimonio actual y su evolución en el rango elegido (por defecto 12 meses). */
-export function useNetWorth(range: NetWorthRange = '12M') {
+/**
+ * Patrimonio actual y su evolución en el rango elegido (por defecto 12 meses). `today` permite
+ * a Inicio pasar una fecha viva (spec 010); si se omite se usa la del montaje.
+ */
+export function useNetWorth(range: NetWorthRange = '12M', todayOverride?: IsoDate) {
   const accounts = useActiveAccounts();
   const transactions = useActiveTransactions();
   const cdts = useActiveCdts();
   const assets = useActiveAssets();
-  const today = useToday();
+  const mountedToday = useToday();
+  const today = todayOverride ?? mountedToday;
   const report = useMemo(() => netWorthReport(accounts, transactions, cdts, assets, today), [accounts, transactions, cdts, assets, today]);
   const firstMonth = useMemo(() => firstNetWorthMonth(accounts, transactions, cdts, assets), [accounts, transactions, cdts, assets]);
   const evolution = useMemo(
