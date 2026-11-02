@@ -21,10 +21,14 @@ class CdtRecord(SyncRecord):
     matures_on: date
     interest_payment: Literal["AT_MATURITY", "MONTHLY", "QUARTERLY", "SEMIANNUAL", "ANNUAL"]
     withholding_rate: PercentStr = Decimal("4.00")
-    source_account_id: uuid.UUID
+    source_account_id: uuid.UUID | None = None
     payout_account_id: uuid.UUID | None = None
     status: Literal["ACTIVE", "MATURED", "RENEWED", "CANCELLED"] = "ACTIVE"
     renewed_from_cdt_id: uuid.UUID | None = None
+    maturity_value_override: MoneyStr | None = None
+    settled_gross_interest: MoneyStr | None = None
+    settled_withholding: MoneyStr | None = None
+    settled_net_interest: MoneyStr | None = None
 
     @model_validator(mode="after")
     def _single_record_rules(self) -> Self:
@@ -32,4 +36,19 @@ class CdtRecord(SyncRecord):
             raise ValueError("Un CDT no puede ser la renovación de sí mismo.")
         if self.matures_on < self.opened_on:
             raise ValueError("maturesOn no puede ser anterior a openedOn.")
+        if (
+            self.maturity_value_override is not None
+            and self.maturity_value_override < self.principal
+        ):
+            raise ValueError("El valor final no puede ser menor que el capital.")
+        settled = (self.settled_gross_interest, self.settled_withholding, self.settled_net_interest)
+        present = [value is not None for value in settled]
+        if any(present) and not all(present):
+            raise ValueError("La liquidación del CDT debe tener bruto, retención y neto.")
+        gross, withholding, net = settled
+        if gross is not None and withholding is not None and net is not None:
+            if min(gross, withholding, net) < 0:
+                raise ValueError("La liquidación del CDT no admite valores negativos.")
+            if gross - withholding != net:
+                raise ValueError("En la liquidación, bruto − retención debe ser igual al neto.")
         return self

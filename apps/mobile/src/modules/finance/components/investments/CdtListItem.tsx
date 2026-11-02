@@ -18,7 +18,9 @@ function CdtListItemBase({ item }: { item: CdtValues }) {
       icon="trending-up-outline"
       muted={!active}
       meta={
-        item.maturingSoon ? (
+        item.canRenew ? (
+          <Badge label="Listo para renovar" tone="accent" icon="refresh" />
+        ) : item.maturingSoon ? (
           <Badge
             label={item.daysRemaining === 0 ? 'Vence hoy' : `Vence en ${item.daysRemaining} días`}
             tone="warning"
@@ -30,9 +32,9 @@ function CdtListItemBase({ item }: { item: CdtValues }) {
       }
       right={
         <View style={{ alignItems: 'flex-end' }}>
-          <Amount value={cdt.principal} />
+          <Amount value={item.maturityValue} />
           <AppText variant="caption" tone="muted">
-            Capital
+            Al vencimiento
           </AppText>
         </View>
       }

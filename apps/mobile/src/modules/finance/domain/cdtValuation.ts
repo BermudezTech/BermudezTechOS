@@ -1,48 +1,77 @@
 import { Decimal } from 'decimal.js';
 
-import { daysBetween, type IsoDate } from '@/lib/dates';
 import { fromDecimal, toDecimal, type Cents } from '@/lib/money';
 
 import type { Cdt } from './types';
 
-type CdtTerms = Pick<Cdt, 'principal' | 'annualRateEa' | 'termDays' | 'openedOn' | 'withholdingRate'>;
+/**
+ * Valoración de un periodo de CDT (spec 009, research R2). Base de 360 días comerciales; la tasa
+ * nominal es siempre la equivalente con pago al vencimiento. Los cálculos se hacen con Decimal y
+ * solo se redondea al final, al centavo.
+ */
+export type CdtTerms = Pick<Cdt, 'principal' | 'annualRateEa' | 'termDays' | 'withholdingRate'>;
+export type CdtValuationInput = CdtTerms & Pick<Cdt, 'maturityValueOverride'>;
 
-/** Interés compuesto con tasa E.A. por `days` días, en centavos sin redondear. */
-function interestFor(cdt: CdtTerms, days: number): Decimal {
-  const rate = new Decimal(cdt.annualRateEa).div(100);
-  const factor = rate.plus(1).pow(new Decimal(days).div(365)).minus(1);
-  return toDecimal(cdt.principal).mul(factor);
+const YEAR_DAYS = 360;
+const pct = (value: string) => new Decimal(value).div(100);
+
+/** (1 + EA)^(días/360) − 1. */
+function periodFactor(annualRateEa: string, termDays: number): Decimal {
+  return pct(annualRateEa).plus(1).pow(new Decimal(termDays).div(YEAR_DAYS)).minus(1);
 }
 
-export function elapsedDays(cdt: Pick<Cdt, 'openedOn' | 'termDays'>, today: IsoDate): number {
-  return Math.max(0, Math.min(cdt.termDays, daysBetween(cdt.openedOn, today)));
+/** Interés bruto del periodo: principal × ((1 + EA)^(días/360) − 1). */
+export function grossInterest(terms: CdtTerms): Cents {
+  return fromDecimal(toDecimal(terms.principal).mul(periodFactor(terms.annualRateEa, terms.termDays)));
 }
 
-/** Interés causado a la fecha: principal × ((1 + EA)^(días/365) − 1), días acotados al plazo. */
-export function accruedInterest(cdt: CdtTerms, today: IsoDate): Cents {
-  return fromDecimal(interestFor(cdt, elapsedDays(cdt, today)));
+/** Valor neto al vencimiento calculado: principal + bruto × (1 − retención). */
+export function calculatedMaturityValue(terms: CdtTerms): Cents {
+  const gross = toDecimal(terms.principal).mul(periodFactor(terms.annualRateEa, terms.termDays));
+  const net = gross.mul(new Decimal(1).minus(pct(terms.withholdingRate)));
+  return fromDecimal(toDecimal(terms.principal).plus(net));
 }
 
-/** Interés bruto total al vencimiento. */
-export function totalInterest(cdt: CdtTerms): Cents {
-  return fromDecimal(interestFor(cdt, cdt.termDays));
+/** Valor neto al vencimiento vigente: el del banco si se ajustó, si no el calculado. */
+export function maturityValue(cdt: CdtValuationInput): Cents {
+  return cdt.maturityValueOverride ?? calculatedMaturityValue(cdt);
 }
 
-/** Retención en la fuente sobre el interés total. */
-export function withholdingAmount(cdt: CdtTerms): Cents {
-  return fromDecimal(interestFor(cdt, cdt.termDays).mul(new Decimal(cdt.withholdingRate).div(100)));
+/** Tasa nominal anual (pago al vencimiento) desde la TEA: ((1 + EA)^(días/360) − 1) × 360/días. */
+export function nominalFromEa(annualRateEa: string, termDays: number): string {
+  return periodFactor(annualRateEa, termDays).mul(YEAR_DAYS).div(termDays).mul(100).toFixed(4);
 }
 
-/** principal + interésTotal × (1 − retención). */
-export function expectedNetAtMaturity(cdt: CdtTerms): Cents {
-  const net = interestFor(cdt, cdt.termDays).mul(new Decimal(1).minus(new Decimal(cdt.withholdingRate).div(100)));
-  return fromDecimal(toDecimal(cdt.principal).plus(net));
+/** Interés bruto implícito en un valor neto final: (valor − principal) ÷ (1 − retención). */
+function impliedGross(terms: CdtTerms, value: Cents): Decimal {
+  const keep = new Decimal(1).minus(pct(terms.withholdingRate));
+  return toDecimal(value).minus(toDecimal(terms.principal)).div(keep);
 }
 
-/** principal + interés causado − intereses ya pagados. */
-export function currentValue(cdt: CdtTerms, paidInterest: Cents, today: IsoDate): Cents {
-  const value = toDecimal(cdt.principal)
-    .plus(interestFor(cdt, elapsedDays(cdt, today)))
-    .minus(toDecimal(paidInterest));
-  return fromDecimal(value);
+/** Tasa nominal anual implícita en el valor final del banco: (bruto ÷ principal) × 360/días. */
+export function nominalFromMaturityValue(terms: CdtTerms, value: Cents): string {
+  return impliedGross(terms, value).div(toDecimal(terms.principal)).mul(YEAR_DAYS).div(terms.termDays).mul(100).toFixed(4);
+}
+
+/** Tasa nominal a guardar (FR-010): desde el valor ajustado si lo hay, si no desde la TEA. */
+export function nominalRate(cdt: CdtValuationInput): string {
+  return cdt.maturityValueOverride === null
+    ? nominalFromEa(cdt.annualRateEa, cdt.termDays)
+    : nominalFromMaturityValue(cdt, cdt.maturityValueOverride);
+}
+
+export interface Settlement {
+  gross: Cents;
+  withholding: Cents;
+  net: Cents;
+}
+
+/**
+ * Liquidación de un periodo con valor neto final `value` (FR-019a): neto = valor − principal;
+ * bruto = neto ÷ (1 − retención) redondeado; retención = bruto − neto (exacto al centavo).
+ */
+export function settlement(terms: CdtTerms, value: Cents): Settlement {
+  const net = value - terms.principal;
+  const gross = fromDecimal(impliedGross(terms, value));
+  return { gross, withholding: (gross - net) as Cents, net: net as Cents };
 }

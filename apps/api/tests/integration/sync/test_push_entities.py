@@ -102,3 +102,65 @@ async def test_every_entity_round_trips_to_the_database(
     row = (await db_session.scalars(select(ENTITY_BY_TABLE["cdts"].model))).one()
     assert row.annual_rate_ea == Decimal("10.2500")
     assert row.opened_on == date(2026, 10, 1)
+
+
+def _by_id(results: list[Any]) -> dict[str, Any]:
+    return {result["id"]: result for result in results}
+
+
+async def test_existing_cdt_and_renewal_chain_share_the_account(
+    client: AsyncClient, token: str, records: Records
+) -> None:
+    """Spec 009: CDT sin origen y renovación en la misma cuenta INVESTMENT."""
+    investment = records.account(type="INVESTMENT", name="CDT existente")
+    first = records.cdt(investment["id"], None, status="RENEWED")
+    renewal = records.cdt(
+        investment["id"],
+        None,
+        renewedFromCdtId=first["id"],
+        openedOn="2027-03-30",
+        maturesOn="2027-09-30",
+    )
+    results = await push_ok(client, token, {"accounts": [investment], "cdts": [first, renewal]})
+    assert set(statuses(results)) == {"APPLIED"}
+
+    # En otro lote: una segunda renovación de la misma cadena también se acepta.
+    second = records.cdt(
+        investment["id"],
+        None,
+        renewedFromCdtId=renewal["id"],
+        openedOn="2027-09-30",
+        maturesOn="2028-03-30",
+    )
+    assert statuses(await push_ok(client, token, {"cdts": [second]})) == ["APPLIED"]
+
+
+async def test_renewal_in_another_account_is_incoherent(
+    client: AsyncClient, token: str, records: Records
+) -> None:
+    first_account = records.account(type="INVESTMENT", name="CDT A")
+    other_account = records.account(type="INVESTMENT", name="CDT B")
+    first = records.cdt(first_account["id"], None)
+    renewal = records.cdt(other_account["id"], None, renewedFromCdtId=first["id"])
+    results = _by_id(
+        await push_ok(
+            client,
+            token,
+            {"accounts": [first_account, other_account], "cdts": [first, renewal]},
+        )
+    )
+    assert results[first["id"]]["status"] == "APPLIED"
+    assert results[renewal["id"]]["code"] == "INCOHERENT"
+
+
+async def test_cdt_rejects_partial_settlement_and_low_override(
+    client: AsyncClient, token: str, records: Records
+) -> None:
+    investment = records.account(type="INVESTMENT", name="CDT")
+    partial = records.cdt(investment["id"], None, settledGrossInterest="10.00")
+    low = records.cdt(investment["id"], None, maturityValueOverride="1.00")
+    results = _by_id(
+        await push_ok(client, token, {"accounts": [investment], "cdts": [partial, low]})
+    )
+    assert results[partial["id"]]["code"] == "VALIDATION_ERROR"
+    assert results[low["id"]]["code"] == "VALIDATION_ERROR"

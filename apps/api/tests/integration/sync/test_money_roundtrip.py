@@ -13,7 +13,15 @@ async def test_amounts_round_trip_exactly(
     amounts = ["0.10", "0.20", "0.30"]
     transactions = [records.transaction(account["id"], amount=amount) for amount in amounts]
     cdt = records.cdt(
-        investment["id"], account["id"], annualRateEa="10.2500", withholdingRate="4.00"
+        investment["id"],
+        account["id"],
+        annualRateEa="10.2500",
+        withholdingRate="4.00",
+        status="RENEWED",
+        maturityValueOverride="10245873.01",
+        settledGrossInterest="256117.72",
+        settledWithholding="10244.71",
+        settledNetInterest="245873.01",
     )
     results = await push_ok(
         client,
@@ -32,3 +40,7 @@ async def test_amounts_round_trip_exactly(
     assert pulled[cdt["id"]]["annualRateEa"] == "10.2500"
     assert pulled[cdt["id"]]["annualRateNominal"] == "9.7800"
     assert pulled[cdt["id"]]["withholdingRate"] == "4.00"
+    assert pulled[cdt["id"]]["maturityValueOverride"] == "10245873.01"
+    assert pulled[cdt["id"]]["settledGrossInterest"] == "256117.72"
+    assert pulled[cdt["id"]]["settledWithholding"] == "10244.71"
+    assert pulled[cdt["id"]]["settledNetInterest"] == "245873.01"

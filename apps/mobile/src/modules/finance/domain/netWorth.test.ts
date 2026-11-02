@@ -1,6 +1,5 @@
 import { cents } from '@/lib/money';
 
-import { currentValue } from './cdtValuation';
 import { firstNetWorthMonth, isAssetValueExpired, netWorthEvolution, netWorthMonthsFor, netWorthReport } from './netWorth';
 import { makeAccount, makeCdt, makeTx } from './testUtils';
 import type { Asset } from './types';
@@ -38,14 +37,20 @@ const accounts = [savings, pocket, card, foreign, invAccount];
 
 describe('netWorthReport', () => {
   const report = netWorthReport(accounts, txs, [cdt], [car], TODAY);
-  const cdtValue = currentValue(cdt, cents(0), TODAY);
+  const cdtValue = cdt.principal;
 
-  it('neto = activos − pasivos, con el CDT por su valor actual y sin doble conteo', () => {
+  it('neto = activos − pasivos, con el CDT por su capital y sin doble conteo', () => {
     // Cuentas: ahorros 500.000 + cajita 100.000 (la cuenta del CDT no se suma).
     expect(report.assetsTotal).toBe(600_000 + cdtValue + 5_000_000);
     expect(report.liabilitiesTotal).toBe(200_000);
     expect(report.netWorth).toBe(report.assetsTotal - 200_000);
     expect(report.groups.flatMap((g) => g.items).some((i) => i.id === 'inv')).toBe(false);
+  });
+
+  it('un ingreso por interés ligado al CDT no cambia su valor (spec 009)', () => {
+    const interest = makeTx({ accountId: 'inv', type: 'INCOME', amount: cents(20_000), on: '2026-10-01', cdtId: 'cdt' });
+    const withInterest = netWorthReport(accounts, [...txs, interest], [cdt], [car], TODAY);
+    expect(withInterest.groups.find((g) => g.key === 'INVESTMENTS')?.total).toBe(cdt.principal);
   });
 
   it('marca y no suma las cuentas excluidas', () => {

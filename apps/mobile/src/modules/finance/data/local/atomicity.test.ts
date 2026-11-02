@@ -42,6 +42,10 @@ describe('atomicidad (FR-011)', () => {
         payoutAccountId: null,
         status: 'ACTIVE',
         renewedFromCdtId: null,
+        maturityValueOverride: null,
+        settledGrossInterest: null,
+        settledWithholding: null,
+        settledNetInterest: null,
       }),
     ).rejects.toThrow('disco lleno');
     db.runAsync = original;

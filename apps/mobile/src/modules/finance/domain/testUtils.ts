@@ -75,6 +75,10 @@ export function makeCdt(over: Partial<Cdt> = {}): Cdt {
     payoutAccountId: null,
     status: 'ACTIVE',
     renewedFromCdtId: null,
+    maturityValueOverride: null,
+    settledGrossInterest: null,
+    settledWithholding: null,
+    settledNetInterest: null,
     ...over,
   };
 }

@@ -2,7 +2,6 @@ import { addDays, isoDate, localDayKey, parseIsoDate, periodRangeUtc, shiftPerio
 import { add, sub, sum, ZERO, type Cents } from '@/lib/money';
 
 import { balancesByAccount, debtOf } from './balances';
-import { currentValue } from './cdtValuation';
 import type { Account, Asset, Cdt, Transaction } from './types';
 
 export type NetWorthGroupKey = 'ACCOUNTS' | 'INVESTMENTS' | 'ASSETS' | 'LIABILITIES';
@@ -53,18 +52,13 @@ const labels: Record<NetWorthGroupKey, string> = {
   LIABILITIES: 'Deudas',
 };
 
-/** Intereses de CDT ya recibidos (ingresos ligados al CDT). */
-function paidInterest(cdt: Cdt, transactions: Transaction[]): Cents {
-  return sum(transactions.filter((t) => t.cdtId === cdt.id && t.type === 'INCOME' && !t.deletedAt).map((t) => t.amount));
-}
-
 function isCdtAlive(cdt: Cdt, date: IsoDate): boolean {
   if (cdt.deletedAt || cdt.status === 'CANCELLED') return false;
   return cdt.openedOn <= date && (cdt.status === 'ACTIVE' ? true : cdt.maturesOn > date);
 }
 
 /**
- * Patrimonio neto = Σ activos (cuentas ASSET + valor actual de CDTs + bienes) − Σ deudas
+ * Patrimonio neto = Σ activos (cuentas ASSET + capital de los CDTs vivos + bienes) − Σ deudas
  * (LIABILITY), excluyendo `isExcludedFromNetWorth` (data-model). Las cuentas INVESTMENT de
  * un CDT se cuentan por el valor del CDT, no dos veces.
  */
@@ -116,7 +110,8 @@ function buildReport(
       return {
         id: c.id,
         name: `CDT ${c.issuer}`,
-        value: currentValue(c, paidInterest(c, transactions), date),
+        // Spec 009 (FR-013): el CDT vale su capital; el interés se registra al renovar.
+        value: c.principal,
         excluded: account?.isExcludedFromNetWorth ?? false,
         expired: false,
         icon: 'trending-up-outline',

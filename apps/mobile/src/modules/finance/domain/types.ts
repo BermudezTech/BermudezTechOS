@@ -142,15 +142,46 @@ export interface CdtInput {
   interestPayment: InterestPayment;
   /** Porcentaje decimal, por defecto "4.00". */
   withholdingRate: string;
-  sourceAccountId: string;
+  /** `null`: CDT existente registrado sin movimiento, o periodo de renovación (spec 009). */
+  sourceAccountId: string | null;
   payoutAccountId: string | null;
   status: CdtStatus;
   renewedFromCdtId: string | null;
+  /** Valor neto al vencimiento indicado por el banco; `null` = calculado. */
+  maturityValueOverride: Cents | null;
+  /** Liquidación del periodo al renovarlo (FR-019a): bruto − retención = neto. */
+  settledGrossInterest: Cents | null;
+  settledWithholding: Cents | null;
+  settledNetInterest: Cents | null;
 }
 
 export interface Cdt extends SyncFields, CdtInput {
-  /** Cuenta INVESTMENT 1:1. */
+  /** Cuenta INVESTMENT, compartida por los periodos de una cadena de renovaciones. */
   accountId: string;
+}
+
+export type CdtOrigin = 'TRANSFER' | 'EXISTING' | 'RENEWAL';
+export type RenewalOperation = 'RENEW' | 'ADD' | 'WITHDRAW';
+
+export interface CdtRenewalInput {
+  /** Valor final del periodo que termina (calculado o ajustado al banco). */
+  previousMaturityValue: Cents;
+  operation: RenewalOperation;
+  /** Aporte o retiro (solo ADD/WITHDRAW). */
+  amount: Cents | null;
+  /** Cuenta de origen del aporte o destino del retiro. */
+  adjustmentAccountId: string | null;
+  /** Capital del nuevo periodo = valor final ± ajuste (R4). */
+  principal: Cents;
+  annualRateEa: string;
+  termDays: number;
+  withholdingRate: string;
+  openedOn: IsoDate;
+  maturesOn: IsoDate;
+  maturityValueOverride: Cents | null;
+  interestPayment: InterestPayment;
+  payoutAccountId: string | null;
+  certificateNumber: string | null;
 }
 
 export interface AssetInput {

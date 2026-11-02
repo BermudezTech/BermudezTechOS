@@ -5,7 +5,7 @@ import { Fab, isModalPath } from '@/components/ui';
 import { useTheme } from '@/theme';
 
 /**
- * Stack de Finanzas: las rutas `new` y `edit` se presentan como modal (contracts/navigation.md).
+ * Stack de Finanzas: las rutas `new`, `edit` y `renew` se presentan como modal (contracts/navigation.md).
  * El FAB está en todas las pantallas de Finanzas salvo en los modales (FR-015).
  */
 export default function FinanceLayout() {
@@ -29,7 +29,7 @@ export default function FinanceLayout() {
         screenOptions={({ route }) => ({
           headerShown: false,
           contentStyle: { backgroundColor: theme.colors.background },
-          presentation: /(^|\/)(new|edit)$/.test(route.name) ? 'modal' : 'card',
+          presentation: /(^|\/)(new|edit|renew)$/.test(route.name) ? 'modal' : 'card',
         })}
       />
       {isModalPath(pathname) ? null : <Fab onPress={openNew} />}

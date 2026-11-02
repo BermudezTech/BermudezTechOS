@@ -160,3 +160,66 @@ def test_cdt_account_must_be_investment() -> None:
 def test_cdt_source_differs_from_its_account() -> None:
     record = _cdt(source_account_id=ACCOUNT)
     assert _check("cdts", record, _accounts("INVESTMENT")) == RejectCode.INCOHERENT
+
+
+def test_cdt_without_source_is_coherent() -> None:
+    """CDT existente registrado sin movimiento de origen (spec 009)."""
+    assert _check("cdts", _cdt(source_account_id=None), _accounts("INVESTMENT")) is None
+
+
+def _with_previous(account_id: uuid.UUID) -> tuple[uuid.UUID, ResolvedRefs]:
+    previous = uuid.uuid4()
+    refs = _accounts("INVESTMENT")
+    refs._rows["cdts"] = {previous: SimpleNamespace(id=previous, account_id=account_id)}
+    return previous, refs
+
+
+def test_renewal_must_share_the_previous_account() -> None:
+    previous, refs = _with_previous(ACCOUNT)
+    renewal = _cdt(source_account_id=None, renewed_from_cdt_id=previous)
+    assert _check("cdts", renewal, refs) is None
+
+    previous, refs = _with_previous(uuid.uuid4())
+    renewal = _cdt(source_account_id=None, renewed_from_cdt_id=previous)
+    assert _check("cdts", renewal, refs) == RejectCode.INCOHERENT
+
+
+def test_renewal_uses_previous_from_the_same_batch() -> None:
+    previous = _cdt()
+    refs = _accounts("INVESTMENT")
+    refs.batch.applied(0, "cdts", previous)
+    renewal = _cdt(source_account_id=None, renewed_from_cdt_id=previous.id)
+    assert _check("cdts", renewal, refs) is None
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"maturity_value_override": "99.99"},
+        {"settled_gross_interest": "10.00"},
+        {
+            "settled_gross_interest": "10.00",
+            "settled_withholding": "0.40",
+            "settled_net_interest": "9.00",
+        },
+        {
+            "settled_gross_interest": "-1.00",
+            "settled_withholding": "0.00",
+            "settled_net_interest": "-1.00",
+        },
+    ],
+)
+def test_cdt_rejects_invalid_override_or_settlement(fields: dict[str, Any]) -> None:
+    with pytest.raises(ValueError):
+        _cdt(**fields)
+
+
+def test_cdt_accepts_consistent_settlement() -> None:
+    record = _cdt(
+        maturity_value_override="102.40",
+        settled_gross_interest="2.50",
+        settled_withholding="0.10",
+        settled_net_interest="2.40",
+        status="RENEWED",
+    )
+    assert _check("cdts", record, _accounts("INVESTMENT")) is None

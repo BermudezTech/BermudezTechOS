@@ -1,10 +1,10 @@
 import { Decimal } from 'decimal.js';
 
-import { addDays, daysBetween, type IsoDate } from '@/lib/dates';
+import { addCommercialDays, daysBetween, type IsoDate } from '@/lib/dates';
 import { sum, toDecimal, type Cents } from '@/lib/money';
 
-import { accruedInterest, currentValue, elapsedDays, expectedNetAtMaturity, totalInterest, withholdingAmount } from './cdtValuation';
-import type { Cdt, Transaction } from './types';
+import { maturityValue, settlement, type Settlement } from './cdtValuation';
+import type { Cdt, CdtOrigin, RenewalOperation } from './types';
 
 export const MATURING_SOON_DAYS = 15;
 
@@ -17,18 +17,28 @@ export interface CdtSummary {
 
 export interface CdtValues {
   cdt: Cdt;
-  accrued: Cents;
-  currentValue: Cents;
-  totalInterest: Cents;
-  withholding: Cents;
-  expectedNet: Cents;
+  /** Valor neto esperado al vencimiento (ajustado al banco o calculado). */
+  maturityValue: Cents;
+  isOverridden: boolean;
+  /** Bruto, retención y neto del periodo según `maturityValue`. */
+  settlement: Settlement;
   daysElapsed: number;
   daysRemaining: number;
   maturingSoon: boolean;
+  canRenew: boolean;
+  /** Periodos de la cadena de renovaciones, del más antiguo al actual (incluido). */
+  chain: Cdt[];
 }
 
+/** Origen del dinero del periodo (research R5). */
+export function cdtOrigin(cdt: Pick<Cdt, 'renewedFromCdtId' | 'sourceAccountId'>): CdtOrigin {
+  if (cdt.renewedFromCdtId) return 'RENEWAL';
+  return cdt.sourceAccountId ? 'TRANSFER' : 'EXISTING';
+}
+
+/** Vencimiento propuesto con días comerciales (spec 009, FR-001). */
 export function defaultMaturesOn(openedOn: IsoDate, termDays: number): IsoDate {
-  return addDays(openedOn, termDays);
+  return addCommercialDays(openedOn, termDays);
 }
 
 /** ACTIVO y vence en ≤ 15 días (FR-025). */
@@ -36,6 +46,46 @@ export function isMaturingSoon(cdt: Pick<Cdt, 'status' | 'maturesOn'>, today: Is
   if (cdt.status !== 'ACTIVE') return false;
   const days = daysBetween(today, cdt.maturesOn);
   return days >= 0 && days <= MATURING_SOON_DAYS;
+}
+
+/** Periodo vivo que renovó a `cdt`, si existe. */
+export function liveSuccessor(cdt: Pick<Cdt, 'id'>, cdts: Iterable<Cdt>): Cdt | null {
+  for (const other of cdts) {
+    if (!other.deletedAt && other.renewedFromCdtId === cdt.id) return other;
+  }
+  return null;
+}
+
+/** Se puede renovar desde el día del vencimiento, inclusive (FR-017, research R10). */
+export function canRenew(cdt: Cdt, cdts: Iterable<Cdt>, today: IsoDate): boolean {
+  return cdt.status === 'ACTIVE' && !cdt.deletedAt && today >= cdt.maturesOn && liveSuccessor(cdt, cdts) === null;
+}
+
+/** Cadena de renovaciones hasta `cdt`, del periodo más antiguo al actual. */
+export function cdtChain(cdt: Cdt, byId: Record<string, Cdt>): Cdt[] {
+  const chain = [cdt];
+  const seen = new Set([cdt.id]);
+  let current = cdt;
+  while (current.renewedFromCdtId) {
+    const previous = byId[current.renewedFromCdtId];
+    if (!previous || seen.has(previous.id)) break;
+    chain.unshift(previous);
+    seen.add(previous.id);
+    current = previous;
+  }
+  return chain;
+}
+
+/** Capital del nuevo periodo = valor final anterior ± aporte/retiro (research R4). */
+export function renewalPrincipal(previousValue: Cents, operation: RenewalOperation, amount: Cents | null): Cents {
+  const delta = operation === 'RENEW' ? 0 : (amount ?? 0);
+  return (operation === 'WITHDRAW' ? previousValue - delta : previousValue + delta) as Cents;
+}
+
+/** Inversa de `renewalPrincipal`: valor final anterior implícito en un capital editado. */
+export function previousValueFromPrincipal(principal: Cents, operation: RenewalOperation, amount: Cents | null): Cents {
+  const delta = operation === 'RENEW' ? 0 : (amount ?? 0);
+  return (operation === 'WITHDRAW' ? principal + delta : principal - delta) as Cents;
 }
 
 /** Rendimiento promedio ponderado = Σ(principal × EA) / Σ principal sobre CDTs ACTIVE. */
@@ -57,17 +107,18 @@ export function sortByMaturity(cdts: Cdt[]): Cdt[] {
   return [...cdts].sort((a, b) => statusOrder[a.status] - statusOrder[b.status] || a.maturesOn.localeCompare(b.maturesOn));
 }
 
-export function cdtValues(cdt: Cdt, transactions: Transaction[], today: IsoDate): CdtValues {
-  const paid = sum(transactions.filter((t) => t.cdtId === cdt.id && t.type === 'INCOME' && !t.deletedAt).map((t) => t.amount));
+export function cdtValues(cdt: Cdt, cdts: Cdt[], today: IsoDate): CdtValues {
+  const value = maturityValue(cdt);
+  const byId = Object.fromEntries(cdts.map((c) => [c.id, c]));
   return {
     cdt,
-    accrued: accruedInterest(cdt, today),
-    currentValue: cdt.status === 'ACTIVE' ? currentValue(cdt, paid, today) : (0 as Cents),
-    totalInterest: totalInterest(cdt),
-    withholding: withholdingAmount(cdt),
-    expectedNet: expectedNetAtMaturity(cdt),
-    daysElapsed: elapsedDays(cdt, today),
+    maturityValue: value,
+    isOverridden: cdt.maturityValueOverride !== null,
+    settlement: settlement(cdt, value),
+    daysElapsed: Math.max(0, Math.min(cdt.termDays, daysBetween(cdt.openedOn, today))),
     daysRemaining: Math.max(0, daysBetween(today, cdt.maturesOn)),
     maturingSoon: isMaturingSoon(cdt, today),
+    canRenew: canRenew(cdt, cdts, today),
+    chain: cdtChain(cdt, byId),
   };
 }

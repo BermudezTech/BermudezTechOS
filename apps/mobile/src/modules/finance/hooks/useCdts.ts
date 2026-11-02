@@ -1,26 +1,28 @@
 import { useMemo } from 'react';
 
 import { cdtSummary, cdtValues, sortByMaturity } from '../domain/cdts';
-import { useActiveCdts, useActiveTransactions, useToday } from './useFinanceData';
+import { useActiveCdts, useToday } from './useFinanceData';
 
-export { createCdt, updateCdt } from '../data/local/cdtsRepo';
+export { cdtDeletionPreview, createCdt, deleteCdt, renewCdt, updateCdt } from '../data/local/cdtsRepo';
 
 export function useCdts() {
   const cdts = useActiveCdts();
-  const transactions = useActiveTransactions();
   const today = useToday();
   return useMemo(
-    () => ({ items: sortByMaturity(cdts).map((c) => cdtValues(c, transactions, today)), summary: cdtSummary(cdts) }),
-    [cdts, transactions, today],
+    () => ({
+      // Los periodos renovados no se listan aparte: se ven en el historial del vigente (spec 009).
+      items: sortByMaturity(cdts.filter((c) => c.status !== 'RENEWED')).map((c) => cdtValues(c, cdts, today)),
+      summary: cdtSummary(cdts),
+    }),
+    [cdts, today],
   );
 }
 
 export function useCdt(id: string | undefined) {
   const cdts = useActiveCdts();
-  const transactions = useActiveTransactions();
   const today = useToday();
   return useMemo(() => {
     const cdt = cdts.find((c) => c.id === id);
-    return cdt ? cdtValues(cdt, transactions, today) : undefined;
-  }, [cdts, transactions, today, id]);
+    return cdt ? cdtValues(cdt, cdts, today) : undefined;
+  }, [cdts, today, id]);
 }

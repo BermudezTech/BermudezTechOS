@@ -18,5 +18,5 @@ export function useNavInset(): number {
 
 /** Rutas presentadas como modal (formularios de creación/edición). */
 export function isModalPath(pathname: string): boolean {
-  return /\/(new|edit)$/.test(pathname);
+  return /\/(new|edit|renew)$/.test(pathname);
 }

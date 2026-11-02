@@ -111,6 +111,23 @@ export function addDays(date: IsoDate, days: number): IsoDate {
   return new Date(t).toISOString().slice(0, 10);
 }
 
+/**
+ * Vencimiento con días comerciales (spec 009, FR-001): cada bloque de 30 días equivale a un mes
+ * calendario y los días sobrantes se suman como días calendario. Replica `helpComercialDays` del
+ * usuario (incluido 31-ene + 30 → 03-mar), sin su límite de 24 meses.
+ */
+export function addCommercialDays(openedOn: IsoDate, termDays: number): IsoDate {
+  const { year, month } = parseIsoDate(openedOn);
+  const months = Math.floor(termDays / 30);
+  let extra = 0;
+  for (let k = 0; k < months; k++) {
+    const y = year + Math.floor((month - 1 + k) / 12);
+    const m = ((month - 1 + k) % 12) + 1;
+    extra += new Date(Date.UTC(y, m, 0)).getUTCDate() - 30;
+  }
+  return addDays(openedOn, termDays + extra);
+}
+
 export function daysBetween(from: IsoDate, to: IsoDate): number {
   return differenceInCalendarDays(new Date(`${to}T00:00:00Z`), new Date(`${from}T00:00:00Z`));
 }

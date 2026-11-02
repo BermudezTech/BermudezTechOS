@@ -90,7 +90,7 @@ class Records:
         }
         return self._build(fields, overrides)
 
-    def cdt(self, account_id: str, source_account_id: str, **overrides: Any) -> Record:
+    def cdt(self, account_id: str, source_account_id: str | None, **overrides: Any) -> Record:
         fields = {
             "accountId": account_id,
             "issuer": "Bancolombia",

@@ -7,6 +7,7 @@ import type {
   AssetInput,
   Cdt,
   CdtInput,
+  CdtRenewalInput,
   GroupStatus,
   ReimbursementGroup,
   ReimbursementGroupInput,
@@ -92,9 +93,16 @@ export interface FinanceRepository {
   /** SETTLED solo con saldo 0. */
   setReimbursementGroupStatus(id: string, status: GroupStatus): Promise<void>;
 
-  /** Crea también la cuenta INVESTMENT y la transferencia de apertura. */
+  /** Crea también la cuenta INVESTMENT y, si hay cuenta de origen, la transferencia de apertura. */
   createCdt(input: CdtInput): Promise<Cdt>;
+  /** Edita el periodo vigente; ajusta la apertura o el saldo inicial si cambia el capital. */
   updateCdt(id: string, patch: Partial<CdtInput>): Promise<Cdt>;
+  /** Qué borraría `deleteCdt` (permitido, motivo y número de movimientos). */
+  cdtDeletionPreview(id: string): { allowed: boolean; reason?: string; transactionCount: number };
+  /** Borrado en cascada; borrar una renovación la deshace (spec 009, FR-014 a FR-016). */
+  deleteCdt(id: string): Promise<void>;
+  /** Renueva un CDT vencido; devuelve el nuevo periodo (spec 009, FR-017 a FR-021). */
+  renewCdt(id: string, input: CdtRenewalInput): Promise<Cdt>;
 
   createAsset(input: AssetInput): Promise<Asset>;
   updateAsset(id: string, patch: Partial<AssetInput>): Promise<Asset>;
